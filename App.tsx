@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import TrackPlayer from 'react-native-track-player';
+import { PlaybackService } from './src/service/PlaybackService';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, SafeAreaView, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -144,6 +146,8 @@ export default function App() {
     </QueryClientProvider>
   );
 }
+
+TrackPlayer.registerPlaybackService(() => PlaybackService);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a' },

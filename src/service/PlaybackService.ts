@@ -1,8 +1,10 @@
-// Deprecated: This service is no longer used.
-// Audio playback is now handled by AudioService.ts with expo-av
-// YouTube playback is handled by react-native-youtube-iframe
-// This file is kept for reference only and can be safely deleted.
+import TrackPlayer, { Event } from 'react-native-track-player';
 
-export async function PlaybackService() {
-  // No-op
-}
+export const PlaybackService = async function () {
+  TrackPlayer.addEventListener(Event.RemotePlay, () => TrackPlayer.play());
+  TrackPlayer.addEventListener(Event.RemotePause, () => TrackPlayer.pause());
+  TrackPlayer.addEventListener(Event.RemoteNext, () => TrackPlayer.skipToNext());
+  TrackPlayer.addEventListener(Event.RemotePrevious, () => TrackPlayer.skipToPrevious());
+  TrackPlayer.addEventListener(Event.RemoteSeek, (event) => TrackPlayer.seekTo(event.position));
+  TrackPlayer.addEventListener(Event.RemoteStop, () => TrackPlayer.stop());
+};

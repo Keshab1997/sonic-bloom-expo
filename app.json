@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "jsEngine": "hermes",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -34,28 +34,33 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.WAKE_LOCK",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.WAKE_LOCK",
+        "android.permission.INTERNET",
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_AUDIO",
         "android.permission.DOWNLOAD_WITHOUT_NOTIFICATION",
-        "android.permission.ACCESS_MEDIA_LOCATION"
-      ]
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.sonicbloom.player"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "expo-av",
-        {
-          "microphonePermission": false
-        }
-      ],
       "expo-file-system",
-      "expo-font"
-    ]
+      "expo-font",
+      "expo-image-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ba64a852-fb8c-44ac-bf23-f06e4b4813f4"
+      }
+    }
   }
 }
