@@ -19,6 +19,7 @@ interface PlayerContextType {
   isPlaying: boolean;
   progress: number;
   duration: number;
+  buffered: number;
   volume: number;
   shuffle: boolean;
   repeat: "off" | "all" | "one";
@@ -60,6 +61,8 @@ interface PlayerContextType {
   setVolume: (v: number) => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
+  startSeeking: () => void;
+  stopSeeking: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -76,6 +79,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [buffered, setBuffered] = useState(0);
   const [volume, setVolumeState] = useState(DEFAULT_VOLUME);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState<"off" | "all" | "one">("off");
@@ -89,9 +93,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [playbackSpeed, setPlaybackSpeedState] = useState(1.0);
   const [crossfade, setCrossfadeState] = useState(0);
 
+  const isSeekingRef = useRef(false);
   const consecutiveErrorsRef = useRef(0);
   const nextClickTimeRef = useRef(0);
   const prevClickTimeRef = useRef(0);
+  const isLoadingTrackRef = useRef(false);
 
   // Use refs for frequently updated values
   const progressRef = useRef(0);
@@ -200,17 +206,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const playSound = useCallback(async (src: string) => {
     try {
-      await audioService.unload();
-      
       setProgress(0);
       setDuration(0);
 
       await audioService.load(src, volumeRef.current, playbackSpeedRef.current);
       
       audioService.setStatusCallback((status) => {
-        setProgress(status.position);
+        if (!isSeekingRef.current) setProgress(status.position);
         setDuration(status.duration);
         setIsPlaying(status.isPlaying);
+        setBuffered(status.buffered);
       });
       
       audioService.setFinishCallback(handleTrackFinish);
@@ -218,17 +223,25 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       await audioService.play();
       setIsPlaying(true);
       consecutiveErrorsRef.current = 0;
-    } catch (err) {
+    } catch (err: any) {
+      const isAudioFocus = err?.message?.includes('AudioFocus') || err?.message?.includes('Audio focus');
       consecutiveErrorsRef.current++;
       console.error(`Playback error (${consecutiveErrorsRef.current}):`, err);
-      
-      if (consecutiveErrorsRef.current >= 3) {
+
+      if (isAudioFocus && consecutiveErrorsRef.current <= 5) {
+        console.log('[Player] Audio focus issue, retrying...');
+        await new Promise(r => setTimeout(r, 1000 * consecutiveErrorsRef.current));
+        playSoundRef.current(src);
+        return;
+      }
+
+      if (consecutiveErrorsRef.current >= 5) {
         console.error('Too many consecutive errors, stopping playback');
         setIsPlaying(false);
         consecutiveErrorsRef.current = 0;
         return;
       }
-      
+
       const nextIdx = (currentIndexRef.current + 1) % trackListRef.current.length;
       setCurrentIndex(nextIdx);
       const nt = trackListRef.current[nextIdx];
@@ -303,7 +316,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
+  const lastToggleTimeRef = useRef(0);
+  
   const togglePlay = useCallback(() => {
+    const now = Date.now();
+    if (now - (lastToggleTimeRef.current || 0) < 300) {
+      return; // Prevent rapid clicks - debounce 300ms
+    }
+    lastToggleTimeRef.current = now;
+    
     const wasPlaying = isPlayingRef.current;
     setIsPlaying(!wasPlaying);
     if (wasPlaying) {
@@ -313,78 +334,80 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
-  const next = useCallback(() => {
-    // Prevent rapid clicks - debounce
+  const next = useCallback(async () => {
     const now = Date.now();
-    if (now - (nextClickTimeRef.current || 0) < 500) {
-      return; // Ignore if clicked within 500ms
-    }
+    if (now - nextClickTimeRef.current < 500 || isLoadingTrackRef.current) return;
     nextClickTimeRef.current = now;
-    
-    requestAnimationFrame(() => {
-      audioService.unload().catch(() => {});
+    isLoadingTrackRef.current = true;
+
+    try {
+      await audioService.unload();
       setIsPlaying(false);
-      
+      setProgress(0);
+      setDuration(0);
+
       const q = queueRef.current;
-      const advance = (track: Track, idx: number) => {
-        setCurrentIndex(idx);
-        setProgress(0);
-        setDuration(0);
-        playSoundRef.current(audioService.getAudioUrl(track, qualityRef.current));
-      };
-      
+      let track: Track | undefined;
+      let idx: number;
+
       if (q.length > 0) {
-        const nt = q[0];
+        track = q[0];
         setQueue(prev => prev.slice(1));
-        const ei = trackListRef.current.findIndex(t => t.id === nt.id);
-        if (ei !== -1) advance(nt, ei);
-        else { setTrackList(prev => [nt, ...prev]); advance(nt, 0); }
-        return;
+        const ei = trackListRef.current.findIndex(t => t.id === track!.id);
+        if (ei !== -1) { idx = ei; }
+        else { setTrackList(prev => [track!, ...prev]); idx = 0; }
+      } else {
+        idx = shuffleRef.current
+          ? Math.floor(Math.random() * trackListRef.current.length)
+          : (currentIndexRef.current + 1) % trackListRef.current.length;
+        track = trackListRef.current[idx];
       }
-      
-      const nextIdx = shuffleRef.current
-        ? Math.floor(Math.random() * trackListRef.current.length)
-        : (currentIndexRef.current + 1) % trackListRef.current.length;
-      const nt = trackListRef.current[nextIdx];
-      if (nt) advance(nt, nextIdx);
-    });
+
+      if (track) {
+        setCurrentIndex(idx!);
+        await playSoundRef.current(audioService.getAudioUrl(track, qualityRef.current));
+      }
+    } finally {
+      isLoadingTrackRef.current = false;
+    }
   }, []);
 
-  const prev = useCallback(() => {
-    // Prevent rapid clicks - debounce
+  const prev = useCallback(async () => {
     const now = Date.now();
-    if (now - (prevClickTimeRef.current || 0) < 500) {
-      return; // Ignore if clicked within 500ms
-    }
+    if (now - prevClickTimeRef.current < 500 || isLoadingTrackRef.current) return;
     prevClickTimeRef.current = now;
-    
-    requestAnimationFrame(async () => {
-      const pos = progressRef.current;
-      
-      if (pos > 3) {
-        await audioService.seek(0);
+    isLoadingTrackRef.current = true;
+
+    try {
+      if (progressRef.current > 3) {
+        audioService.seek(0).catch(() => {});
         setProgress(0);
         return;
       }
-      
-      audioService.unload().catch(() => {});
+
+      await audioService.unload();
       setIsPlaying(false);
-      
+      setProgress(0);
+      setDuration(0);
+
       const prevIdx = (currentIndexRef.current - 1 + trackListRef.current.length) % trackListRef.current.length;
       const pt = trackListRef.current[prevIdx];
       if (!pt) return;
-      
+
       setCurrentIndex(prevIdx);
-      setProgress(0);
-      setDuration(0);
-      playSoundRef.current(audioService.getAudioUrl(pt, qualityRef.current));
-    });
+      await playSoundRef.current(audioService.getAudioUrl(pt, qualityRef.current));
+    } finally {
+      isLoadingTrackRef.current = false;
+    }
   }, []);
 
   const seek = useCallback((time: number) => {
-    audioService.seek(time).catch(() => {});
     setProgress(time);
+    audioService.seek(time).catch(() => {});
   }, []);
+
+  const startSeeking = useCallback(() => { isSeekingRef.current = true; }, []);
+  const stopSeeking = useCallback(() => { isSeekingRef.current = false; }, []);
 
   const seekForward = useCallback((seconds: number = 10) => {
     const currentPos = progressRef.current;
@@ -402,10 +425,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const setVolume = useCallback((v: number) => {
-    requestAnimationFrame(() => {
-      setVolumeState(v);
-      audioService.setVolume(v).catch(() => {});
-    });
+    setVolumeState(v);
+    audioService.setVolume(v).catch(() => {});
   }, []);
 
   const setPlaybackSpeed = useCallback((speed: number) => {
@@ -415,7 +436,20 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const setQuality = useCallback((q: AudioQuality) => {
     setQualityState(q);
+    qualityRef.current = q;
     AsyncStorage.setItem(STORAGE_KEY_QUALITY, q).catch(() => {});
+    // Reload current track at new quality, preserving position
+    const track = trackListRef.current[currentIndexRef.current];
+    if (track) {
+      const currentPos = progressRef.current;
+      audioService.unload().catch(() => {});
+      setIsPlaying(false);
+      setProgress(0);
+      setDuration(0);
+      playSoundRef.current(audioService.getAudioUrl(track, q)).then(() => {
+        if (currentPos > 0) audioService.seek(currentPos).catch(() => {});
+      }).catch(() => {});
+    }
   }, []);
 
   const toggleShuffle = useCallback(() => {
@@ -478,13 +512,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isPlaying,
       progress: throttledProgress,
       duration: throttledDuration,
+      buffered,
       volume, shuffle, repeat, eqBass, eqMid, eqTreble,
       setEqBass, setEqMid, setEqTreble, applyEqPreset,
       playbackSpeed, setPlaybackSpeed, crossfade, setCrossfade,
       queue, addToQueue, playNext, removeFromQueue, clearQueue, moveQueueItem, shuffleQueue,
       quality, setQuality, sleepMinutes, setSleepTimer, cancelSleepTimer,
       play, playTrack, playTrackList, pause, togglePlay, next, prev, seek, seekForward, seekBackward, setVolume,
-      toggleShuffle, toggleRepeat,
+      toggleShuffle, toggleRepeat, startSeeking, stopSeeking,
       isCurrentTrackLiked: currentTrack?.id ? isLikedHook(String(currentTrack.id)) : false,
       likeCurrentTrack: likeSongHook,
       unlikeCurrentTrack: unlikeSongHook,
@@ -492,11 +527,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [
     trackList, currentTrack, currentIndex, isPlaying,
-    Math.floor(progress), Math.floor(duration),
+    Math.floor(progress), Math.floor(duration), buffered,
     volume, shuffle, repeat, eqBass, eqMid, eqTreble, playbackSpeed, crossfade,
     queue.length, quality, sleepMinutes,
     play, playTrack, playTrackList, pause, togglePlay, next, prev, seek, seekForward, seekBackward, setVolume,
-    toggleShuffle, toggleRepeat, addToQueue, playNext, removeFromQueue, clearQueue,
+    toggleShuffle, toggleRepeat, startSeeking, stopSeeking, addToQueue, playNext, removeFromQueue, clearQueue,
     moveQueueItem, shuffleQueue, setEqBass, setEqMid, setEqTreble, applyEqPreset,
     setPlaybackSpeed, setCrossfade, setQuality, setSleepTimer, cancelSleepTimer,
     isLikedHook, likeSongHook, unlikeSongHook, addToHistory,

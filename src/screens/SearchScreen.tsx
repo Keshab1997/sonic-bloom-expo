@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, StyleSheet, Dimensions
+  ActivityIndicator, StyleSheet, Dimensions, Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -11,12 +11,13 @@ import { usePlayer } from '../context/PlayerContext';
 import { useDownloadsContext } from '../context/DownloadsContext';
 import { useSearchCache } from '../hooks/useSearchCache';
 import { useSearchHistory } from '../hooks/useSearchHistory';
+import { usePlaylistsContext } from '../context/PlaylistsContext';
 import { Toast } from '../components/Toast';
 import { CachedImage } from '../components/CachedImage';
 import { lightHaptic, mediumHaptic } from '../lib/haptics';
 import {
   API_BASE, SONGS_PER_PAGE,
-  TRENDING_SEARCHES, HINDI_ARTISTS, BENGALI_ARTISTS
+  TRENDING_SEARCHES, HINDI_ARTISTS, BENGALI_ARTISTS, CUSTOM_SEARCH_KEYWORDS
 } from '../data/constants';
 
 const { width } = Dimensions.get('window');
@@ -37,10 +38,13 @@ export const SearchScreen: React.FC = () => {
   const [rawAlbums, setRawAlbums] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error'; visible: boolean }>({ message: '', type: 'success', visible: false });
   const [searchInBackground, setSearchInBackground] = useState(false);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const searchCacheRef = useRef<Map<string, { tracks: Track[], timestamp: number }>>(new Map());
   const { currentTrack, isPlaying, addToQueue, playTrackList } = usePlayer();
+  const { createPlaylist, addTrackToPlaylist } = usePlaylistsContext();
   const { isDownloaded, isDownloading, downloadTrack, getDownloadProgress } = useDownloadsContext();
   const { saveSearchResults, getCachedResults } = useSearchCache();
   const { searchHistory, addToHistory, clearHistory: clearSearchHistory, removeFromHistory } = useSearchHistory();
@@ -67,6 +71,24 @@ export const SearchScreen: React.FC = () => {
     setToast({ message, type, visible: true });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2500);
   }, []);
+
+  const handleSaveAllToPlaylist = async () => {
+    if (results.length === 0) return;
+    const pName = newPlaylistName.trim() || `${query} Mix`;
+    setLoading(true);
+    const newPl = await createPlaylist(pName);
+    if (newPl) {
+      for (let i = 0; i < results.length; i++) {
+        await addTrackToPlaylist(newPl.id, results[i], i);
+      }
+      showToast(`Saved ${results.length} songs to "${pName}"`, 'success');
+      setShowPlaylistModal(false);
+      setNewPlaylistName('');
+    } else {
+      showToast('Please login to save playlists', 'error');
+    }
+    setLoading(false);
+  };
 
   const handleSearch = (q: string) => {
     setQuery(q);
@@ -517,18 +539,63 @@ export const SearchScreen: React.FC = () => {
         {/* Empty State - No Query */}
         {!query ? (
           <>
-            {/* Trending Searches */}
+            {/* Trending Searches - grouped by category */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>🔥 Trending Searches</Text>
+              {(['Bengali', 'Hindi', 'Bhojpuri', 'English', 'Mood'] as const).map(cat => {
+                const catEmoji: Record<string, string> = {
+                  Bengali: '🎶', Hindi: '🎬', Bhojpuri: '🥁', English: '🌍', Mood: '🌙'
+                };
+                const items = TRENDING_SEARCHES.filter(t => t.category === cat);
+                return (
+                  <View key={cat} style={styles.categoryBlock}>
+                    <Text style={styles.categoryLabel}>{catEmoji[cat]} {cat}</Text>
+                    <View style={styles.trendingGrid}>
+                      {items.map((t, i) => (
+                        <TouchableOpacity
+                          key={i}
+                          style={[styles.trendingBtn, { backgroundColor: t.color }]}
+                          onPress={() => handleSearch(t.query)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.trendingBtnText}>{t.title}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Duet Jodi Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>👨‍🎤 Best Duet Jodi</Text>
               <View style={styles.trendingGrid}>
-                {TRENDING_SEARCHES.map((t, i) => (
+                {CUSTOM_SEARCH_KEYWORDS.filter(k => k.category === 'Jodi').map((item, i) => (
                   <TouchableOpacity
                     key={i}
-                    style={styles.trendingBtn}
-                    onPress={() => handleSearch(t.query)}
+                    style={[styles.trendingBtn, { backgroundColor: item.color }]}
+                    onPress={() => handleSearch(item.query)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.trendingBtnText}>{t.title}</Text>
+                    <Text style={styles.trendingBtnText}>{item.title}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Mood / Vibe Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>✨ Select Your Vibe</Text>
+              <View style={styles.trendingGrid}>
+                {CUSTOM_SEARCH_KEYWORDS.filter(k => k.category === 'Mood').map((item, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.trendingBtn, { backgroundColor: item.color }]}
+                    onPress={() => handleSearch(item.query)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.trendingBtnText}>{item.title}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -538,7 +605,7 @@ export const SearchScreen: React.FC = () => {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>🎤 Top Artists</Text>
               <View style={styles.artistsGrid}>
-                {[...HINDI_ARTISTS, ...BENGALI_ARTISTS].slice(0, 8).map((artist, i) => (
+                {[...HINDI_ARTISTS, ...BENGALI_ARTISTS].map((artist, i) => (
                   <TouchableOpacity
                     key={i}
                     style={styles.artistItem}
@@ -645,6 +712,14 @@ export const SearchScreen: React.FC = () => {
                     >
                       <Ionicons name="download" size={14} color="#1DB954" />
                       <Text style={styles.actionBtnText}>Download All</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => setShowPlaylistModal(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add-circle" size={14} color="#1DB954" />
+                      <Text style={styles.actionBtnText}>Save to Playlist</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.actionBtn}
@@ -922,6 +997,38 @@ export const SearchScreen: React.FC = () => {
           </>
         )}
       </ScrollView>
+      <Modal visible={showPlaylistModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Save to Playlist</Text>
+            <Text style={styles.loadingSubText}>{results.length} songs will be saved</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder={query ? `${query} Mix` : 'My Playlist'}
+              placeholderTextColor="#555"
+              value={newPlaylistName}
+              onChangeText={setNewPlaylistName}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => { setShowPlaylistModal(false); setNewPlaylistName(''); }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                onPress={handleSaveAllToPlaylist}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalConfirmText}>Save All</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -937,10 +1044,12 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 16, marginTop: 8 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff', marginBottom: 12 },
   trendingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  trendingBtn: { backgroundColor: '#1a0808', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#222' },
+  trendingBtn: { width: (width - 48) / 2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: '#2a2a2a' },
   trendingBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
+  categoryBlock: { marginBottom: 16 },
+  categoryLabel: { fontSize: 13, fontWeight: '700', color: '#888', marginBottom: 8, letterSpacing: 0.5 },
   artistsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  artistItem: { width: (width - 56) / 4 - 9, alignItems: 'center' },
+  artistItem: { width: (width - 56) / 3 - 8, alignItems: 'center' },
   artistImage: { width: '100%', aspectRatio: 1, borderRadius: 999, backgroundColor: '#1a1a1a', marginBottom: 6 },
   artistName: { fontSize: 11, color: '#ccc', textAlign: 'center' },
   historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
@@ -999,4 +1108,13 @@ const styles = StyleSheet.create({
   albumGridImage: { width: '100%', aspectRatio: 1, borderRadius: 8, backgroundColor: '#1a1a1a', marginBottom: 6 },
   albumGridTitle: { fontSize: 12, color: '#ccc', fontWeight: '600' },
   albumGridArtist: { fontSize: 10, color: '#888' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalContent: { backgroundColor: '#1a1a1a', borderRadius: 16, padding: 24, width: '100%' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff', marginBottom: 6 },
+  modalInput: { backgroundColor: '#0a0a0a', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: '#fff', fontSize: 14, marginTop: 12, borderWidth: 1, borderColor: '#333' },
+  modalButtons: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  modalCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#2a2a2a', alignItems: 'center' },
+  modalCancelText: { color: '#888', fontWeight: '600' },
+  modalConfirmBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#1DB954', alignItems: 'center' },
+  modalConfirmText: { color: '#000', fontWeight: '700' },
 });

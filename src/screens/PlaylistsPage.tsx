@@ -1,14 +1,40 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, TextInput, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePlayer } from '../context/PlayerContext';
-import { usePlaylists } from '../hooks/usePlaylists';
+import { usePlaylistsContext } from '../context/PlaylistsContext';
 import { CachedImage } from '../components/CachedImage';
+
+const PlaylistCover: React.FC<{ tracks: any[]; size: number }> = ({ tracks, size }) => {
+  const covers = tracks.slice(0, 4).map((t: any) => t.cover).filter(Boolean);
+  const half = size / 2;
+  if (covers.length >= 4) {
+    return (
+      <View style={{ width: size, height: size, borderRadius: 12, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
+        {covers.map((uri: string, i: number) => (
+          <Image key={i} source={{ uri }} style={{ width: half, height: half }} />
+        ))}
+      </View>
+    );
+  }
+  if (covers.length > 0) {
+    return (
+      <View style={{ width: size, height: size, borderRadius: 12, overflow: 'hidden' }}>
+        <Image source={{ uri: covers[0] }} style={{ width: size, height: size }} />
+      </View>
+    );
+  }
+  return (
+    <LinearGradient colors={['#8b5cf6', '#a78bfa']} style={{ width: size, height: size, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}>
+      <Ionicons name="musical-notes" size={size * 0.5} color="#fff" />
+    </LinearGradient>
+  );
+};
 
 export const PlaylistsPage: React.FC = () => {
   const { playTrackList } = usePlayer();
-  const { playlists, loading, createPlaylist, deletePlaylist } = usePlaylists();
+  const { playlists, loading, createPlaylist, deletePlaylist } = usePlaylistsContext();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
 
@@ -48,12 +74,7 @@ export const PlaylistsPage: React.FC = () => {
       activeOpacity={0.7}
       onPress={() => handlePlay(item, 0)}
     >
-      <LinearGradient
-        colors={['#8b5cf6', '#a78bfa']}
-        style={styles.cardIcon}
-      >
-        <Ionicons name="musical-notes" size={28} color="#fff" />
-      </LinearGradient>
+      <PlaylistCover tracks={item.tracks} size={56} />
       <View style={styles.cardInfo}>
         <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
         <Text style={styles.cardSubtitle}>{item.trackCount} songs</Text>

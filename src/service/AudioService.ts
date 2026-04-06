@@ -7,6 +7,7 @@ interface AudioStatus {
   isPlaying: boolean;
   position: number;
   duration: number;
+  buffered: number;
 }
 
 export class AudioService {
@@ -25,19 +26,35 @@ export class AudioService {
 
   async load(uri: string, volume: number = 1.0, rate: number = 1.0) {
     await this.unload();
-    
-    const { sound } = await Audio.Sound.createAsync(
-      { uri },
-      { 
-        shouldPlay: false, 
-        volume, 
-        rate,
-        progressUpdateIntervalMillis: 500 
-      },
-      this.onPlaybackStatusUpdate.bind(this)
-    );
-    
-    this.sound = sound;
+
+    // Retry audio focus up to 3 times with delay
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+
+        const { sound } = await Audio.Sound.createAsync(
+          { uri },
+          {
+            shouldPlay: false,
+            volume,
+            rate,
+            progressUpdateIntervalMillis: 500,
+          },
+          this.onPlaybackStatusUpdate.bind(this)
+        );
+
+        this.sound = sound;
+        break;
+      } catch (err: any) {
+        if (attempt === 2) throw err;
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
   }
 
   private onPlaybackStatusUpdate(status: any) {
@@ -48,6 +65,7 @@ export class AudioService {
         isPlaying: status.isPlaying,
         position: status.positionMillis / 1000,
         duration: status.durationMillis ? status.durationMillis / 1000 : 0,
+        buffered: status.playableDurationMillis ? status.playableDurationMillis / 1000 : 0,
       });
     }
     

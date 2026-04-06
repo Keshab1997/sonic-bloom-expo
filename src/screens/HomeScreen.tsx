@@ -6,6 +6,8 @@ import { usePlayer } from '../context/PlayerContext';
 import { RECENTLY_PLAYED_KEY } from '../data/constants';
 import { fetchJioSaavn } from '../lib/api';
 import { useOfflineCache } from '../hooks/useOfflineCache';
+import { usePlaylistsContext } from '../context/PlaylistsContext';
+import { useLikedSongsContext } from '../context/LikedSongsContext';
 import { HomeCarousel } from './home/HomeCarousel';
 import { HomeQuickPicks } from './home/HomeQuickPicks';
 import { HomeSections } from './home/HomeSections';
@@ -16,6 +18,8 @@ import { BottomSheetModal } from '../components/BottomSheetModal';
 export const HomeScreen: React.FC = () => {
   const { playTrackList, currentTrack, isPlaying, addToQueue } = usePlayer();
   const { saveToCache, cachedData, isOffline } = useOfflineCache();
+  const { playlists } = usePlaylistsContext();
+  const { likedSongs } = useLikedSongsContext();
 
   // Section tracks
   const [trending, setTrending] = useState<Track[]>([]);
@@ -236,6 +240,8 @@ export const HomeScreen: React.FC = () => {
           trending={trending}
           newReleases={newReleases}
           recentlyPlayed={recentlyPlayed}
+          playlists={playlists}
+          likedSongs={likedSongs}
           loadingTrending={loadingTrending}
           loadingNewReleases={loadingNewReleases}
           currentTrack={currentTrack}

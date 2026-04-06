@@ -147,41 +147,32 @@ export const usePlaylists = () => {
     }
   };
 
-  const addTrackToPlaylist = async (playlistId: string, track: Track) => {
-    console.log('[usePlaylists] addTrackToPlaylist called:', { playlistId, trackId: track.id, trackTitle: track.title });
+  const addTrackToPlaylist = async (playlistId: string, track: Track, position?: number) => {
     try {
-      const playlist = playlists.find(p => p.id === playlistId);
-      if (!playlist) {
-        console.log('[usePlaylists] Playlist not found:', playlistId);
-        return;
-      }
-      
-      const position = playlist.tracks.length;
-      console.log('[usePlaylists] Inserting to Supabase, position:', position);
-      
-      const { data, error } = await supabase.from('playlist_tracks').insert({
+      const pos = position ?? playlists.find(p => p.id === playlistId)?.tracks.length ?? 0;
+
+      const { error } = await supabase.from('playlist_tracks').insert({
         playlist_id: playlistId,
         track_id: String(track.id),
         track_data: track,
-        position,
+        position: pos,
       });
-      
-      console.log('[usePlaylists] Insert result:', { data, error });
-      
+
       if (error) {
         console.error('[usePlaylists] Supabase error:', error);
+        return;
       }
-      
-      const updated = playlists.map(p => {
-        if (p.id === playlistId) {
-          return { ...p, tracks: [...p.tracks, track], trackCount: p.trackCount + 1 };
-        }
-        return p;
+
+      setPlaylists(prev => {
+        const updated = prev.map(p =>
+          p.id === playlistId
+            ? { ...p, tracks: [...p.tracks, track], trackCount: p.trackCount + 1 }
+            : p
+        );
+        const key = getStorageKey();
+        if (key) AsyncStorage.setItem(key, JSON.stringify(updated)).catch(() => {});
+        return updated;
       });
-      setPlaylists(updated);
-      const key = getStorageKey();
-      if (key) await AsyncStorage.setItem(key, JSON.stringify(updated));
-      console.log('[usePlaylists] Track added successfully');
     } catch (e) {
       console.error('[usePlaylists] Failed to add track to playlist:', e);
     }

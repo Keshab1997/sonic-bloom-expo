@@ -10,6 +10,7 @@ import { PlayerProvider } from "./src/context/PlayerContext";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { DownloadsProvider } from './src/context/DownloadsContext';
 import { LikedSongsProvider } from './src/context/LikedSongsContext';
+import { PlaylistsProvider } from './src/context/PlaylistsContext';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
@@ -129,11 +130,13 @@ export default function App() {
         <PlayerProvider>
           <DownloadsProvider>
             <LikedSongsProvider>
+              <PlaylistsProvider>
               <SafeAreaView style={styles.safeArea}>
                 {!splashFinished && <SplashScreen onFinish={handleSplashFinish} />}
                 <RootNavigator />
                 <StatusBar style="light" />
               </SafeAreaView>
+              </PlaylistsProvider>
             </LikedSongsProvider>
           </DownloadsProvider>
         </PlayerProvider>
