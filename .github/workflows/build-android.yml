@@ -32,7 +32,7 @@ jobs:
         run: npm install
 
       - name: Apply patches
-        run: npx patch-package react-native-track-player
+        run: npx patch-package
 
       - name: Build APK
         run: cd android && ./gradlew :app:assembleDebug --no-daemon
