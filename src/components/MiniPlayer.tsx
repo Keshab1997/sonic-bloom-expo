@@ -21,7 +21,7 @@ const MiniButton = memo(({ icon, color, onPress }: { icon: string; color: string
 ));
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onExpand, onClose }) => {
-  const { currentTrack, isPlaying, togglePlay, next, prev, progress, duration, queue, tracks, currentIndex } = usePlayer();
+  const { currentTrack, isPlaying, togglePlay, next, prev, progress, duration, queue, tracks, currentIndex, shuffle, toggleShuffle, repeat, toggleRepeat } = usePlayer();
   const { isLiked, toggleLike } = useLikedSongsContext();
   const { downloadTrack, isDownloaded, isDownloading, getDownloadProgress } = useDownloadsContext();
   const [fsVisible, setFsVisible] = useState(false);
@@ -70,15 +70,17 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onExpand, onClose }) => 
         <TouchableOpacity style={styles.miniBtn} onPress={handleToggleLike} activeOpacity={0.7}>
           <Ionicons name={liked ? "heart" : "heart-outline"} size={22} color={liked ? "#1DB954" : "#fff"} />
         </TouchableOpacity>
+        <MiniButton icon="swap-vertical" color={shuffle ? "#1DB954" : "#666"} onPress={() => { toggleShuffle(); lightHaptic(); }} />
         <MiniButton icon="play-skip-back" color="#fff" onPress={handlePrev} />
         <MiniButton icon={isPlaying ? "pause" : "play"} color="#1DB954" onPress={handleTogglePlay} />
         <MiniButton icon="play-skip-forward" color="#fff" onPress={handleNext} />
+        <MiniButton icon="repeat" color={repeat !== "off" ? "#1DB954" : "#666"} onPress={() => { toggleRepeat(); lightHaptic(); }} />
         <TouchableOpacity style={styles.miniBtn} onPress={() => setPlaylistVisible(true)} activeOpacity={0.7}>
           <View>
             <Ionicons name="list" size={22} color="#fff" />
-            {tracks.length > 0 && (
+            {queue.length > 0 && (
               <View style={styles.queueBadgeMini}>
-                <Text style={styles.queueBadgeTextMini}>{tracks.length}</Text>
+                <Text style={styles.queueBadgeTextMini}>{queue.length}</Text>
               </View>
             )}
           </View>

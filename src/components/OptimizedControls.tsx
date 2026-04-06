@@ -65,6 +65,7 @@ const styles = StyleSheet.create({
   controlBtn: { padding: 12, borderRadius: 24 },
   controlBtnActive: { backgroundColor: 'rgba(29,185,84,0.1)' },
   trackBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
+  skipBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
   playBtn: { width: 72, height: 72, borderRadius: 36, overflow: 'hidden', shadowColor: '#1DB954', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
   playBtnGradient: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
   repeatOneDot: { position: 'absolute', top: 6, right: 6, width: 6, height: 6, backgroundColor: '#1DB954', borderRadius: 3 },

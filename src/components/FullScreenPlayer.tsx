@@ -40,6 +40,7 @@ const ProgressBar = memo(({ progress, duration, buffered, onSeek, onStartSeeking
   const barRef = useRef<View>(null);
   const barPageX = useRef(0);
   const barWidth = useRef(width - 48);
+  const barStartX = useRef(0);
 
   useEffect(() => {
     if (!isMoving.current) setLocalProgress(progress);
@@ -63,14 +64,18 @@ const ProgressBar = memo(({ progress, duration, buffered, onSeek, onStartSeeking
       onStartSeeking();
       setShowTooltip(true);
       Vibration.vibrate(10);
+      const touchX = e.nativeEvent?.pageX;
       barRef.current?.measure((_x, _y, w, _h, pageX) => {
         barPageX.current = pageX;
         barWidth.current = w;
-        setLocalProgress(toTime(e.nativeEvent.pageX));
+        if (touchX != null) {
+          barStartX.current = touchX - pageX;
+          setLocalProgress(toTime(touchX));
+        }
       });
     },
     onPanResponderMove: (_, g) => {
-      setLocalProgress(toTime(g.moveX));
+      setLocalProgress(toTime(barPageX.current + barStartX.current + g.dx));
     },
     onPanResponderRelease: (_, g) => {
       const finalTime = toTime(g.moveX);
@@ -119,6 +124,7 @@ const VolumeSlider = memo(({ volume, setVolume }: { volume: number; setVolume: (
   const barRef = useRef<View>(null);
   const barPageX = useRef(0);
   const barWidth = useRef(1);
+  const barStartX = useRef(0);
 
   useEffect(() => {
     if (!isDragging.current) setLocalVol(volume);
@@ -134,17 +140,20 @@ const VolumeSlider = memo(({ volume, setVolume }: { volume: number; setVolume: (
     onMoveShouldSetPanResponderCapture: () => true,
     onPanResponderGrant: (e) => {
       isDragging.current = true;
-      // measure gives screen-absolute x on grant
+      const touchX = e.nativeEvent?.pageX;
       barRef.current?.measure((_x, _y, w, _h, pageX) => {
         barPageX.current = pageX;
         barWidth.current = w;
-        const v = toVol(e.nativeEvent.pageX);
-        setLocalVol(v);
-        setVolume(v);
+        if (touchX != null) {
+          barStartX.current = touchX - pageX;
+          const v = toVol(touchX);
+          setLocalVol(v);
+          setVolume(v);
+        }
       });
     },
     onPanResponderMove: (_, g) => {
-      const v = toVol(g.moveX);
+      const v = toVol(barPageX.current + barStartX.current + g.dx);
       setLocalVol(v);
       setVolume(v);
     },
@@ -184,6 +193,7 @@ export const FullScreenPlayer: React.FC<Props> = memo(({ visible, onClose }) => 
     isCurrentTrackLiked, likeCurrentTrack, unlikeCurrentTrack,
     queue, sleepMinutes, playbackSpeed, quality, tracks,
     seekForward, seekBackward, startSeeking, stopSeeking,
+    eqBass, eqMid, eqTreble,
   } = usePlayer();
 
   const { user } = useAuth();
@@ -286,7 +296,7 @@ export const FullScreenPlayer: React.FC<Props> = memo(({ visible, onClose }) => 
   const ArtSection = useMemo(() => (
     <View style={styles.artContainer}>
       <CachedImage
-        source={{ uri: currentTrack?.cover }}
+        source={{ uri: currentTrack?.cover || '' }}
         style={[styles.albumArt, { transform: [{ scale: isPlaying ? 1 : 0.92 }] }]}
         contentFit="cover"
         cachePolicy="memory-disk"
@@ -338,8 +348,6 @@ export const FullScreenPlayer: React.FC<Props> = memo(({ visible, onClose }) => 
           onPrev={prev}
           onToggleShuffle={toggleShuffle}
           onToggleRepeat={toggleRepeat}
-          onSeekForward={seekForward}
-          onSeekBackward={seekBackward}
         />
 
         <VolumeSlider volume={volume} setVolume={setVolume} />
@@ -362,9 +370,9 @@ export const FullScreenPlayer: React.FC<Props> = memo(({ visible, onClose }) => 
             <Ionicons name="speedometer-outline" size={16} color={playbackSpeed !== 1 ? '#60a5fa' : 'rgba(255,255,255,0.4)'} />
             <Text style={[styles.toolbarLabel, playbackSpeed !== 1 && styles.toolbarLabelBlue]}>{playbackSpeed}x</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarBtn} onPress={() => setEqVisible(true)} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="options-outline" size={16} color="rgba(255,255,255,0.4)" />
-            <Text style={styles.toolbarLabel}>EQ</Text>
+          <TouchableOpacity style={[styles.toolbarBtn, (eqBass !== 0 || eqMid !== 0 || eqTreble !== 0) && styles.toolbarBtnGreen]} onPress={() => setEqVisible(true)} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="options-outline" size={16} color={eqBass !== 0 || eqMid !== 0 || eqTreble !== 0 ? '#1DB954' : 'rgba(255,255,255,0.4)'} />
+            <Text style={[styles.toolbarLabel, (eqBass !== 0 || eqMid !== 0 || eqTreble !== 0) && styles.toolbarLabelGreen]}>EQ</Text>
           </TouchableOpacity>
         </View>
 
