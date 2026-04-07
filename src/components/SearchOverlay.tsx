@@ -9,7 +9,23 @@ import { toast } from "@/hooks/use-toast";
 import { Track } from "@/data/playlist";
 
 const API_BASE = "https://jiosaavn-api-privatecvc2.vercel.app";
+const API_BASE_FALLBACK = "https://saavn-api.vercel.app";
 const DEBOUNCE_MS = 500;
+
+const apiFetch = async (endpoint: string, retries = 2): Promise<any> => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE}${endpoint}`);
+      if (res.ok) return await res.json();
+      if (attempt < retries) await new Promise(r => setTimeout(r, 300));
+    } catch { if (attempt >= retries) break; }
+  }
+  try {
+    const res = await fetch(`${API_BASE_FALLBACK}${endpoint}`);
+    if (res.ok) return await res.json();
+  } catch { return null; }
+  return null;
+};
 
 type SearchCategory = "all" | "songs" | "albums" | "artists" | "playlists";
 
@@ -119,15 +135,13 @@ export const SearchOverlay = ({ onClose }: SearchOverlayProps) => {
   useEffect(() => {
     const fetchTrending = async () => {
       try {
-        const res = await fetch(`${API_BASE}/modules?language=hindi,bengali,english`);
-        if (!res.ok) return;
-        const mod = await res.json();
+        const mod = await apiFetch(`/modules?language=hindi,bengali,english`);
+        if (!mod) return;
         const trendingRaw = mod.data?.trending?.songs || [];
         const ids = trendingRaw.slice(0, 20).map((s: { id: string }) => s.id).filter(Boolean);
         if (ids.length > 0) {
-          const songRes = await fetch(`${API_BASE}/songs?id=${ids.join(",")}`);
-          if (songRes.ok) {
-            const songData = await songRes.json();
+          const songData = await apiFetch(`/songs?id=${ids.join(",")}`);
+          if (songData) {
             const rawSongs = songData.data || [];
             const tracks: Track[] = [];
             rawSongs.forEach((s: {
@@ -165,9 +179,8 @@ export const SearchOverlay = ({ onClose }: SearchOverlayProps) => {
   // Search functions
   const searchSongs = useCallback(async (q: string, lang: string) => {
     try {
-      const res = await fetch(`${API_BASE}/search/songs?query=${encodeURIComponent(q)}&page=1&limit=50`);
-      if (!res.ok) return [];
-      const json = await res.json();
+      const json = await apiFetch(`/search/songs?query=${encodeURIComponent(q)}&page=1&limit=50`);
+      if (!json) return [];
       let results = json.data?.results || [];
       if (lang !== "all") {
         results = results.filter((s: { language?: string }) => s.language === lang);
@@ -191,9 +204,8 @@ export const SearchOverlay = ({ onClose }: SearchOverlayProps) => {
 
   const searchAlbums = useCallback(async (q: string) => {
     try {
-      const res = await fetch(`${API_BASE}/search/albums?query=${encodeURIComponent(q)}&page=1&limit=50`);
-      if (!res.ok) return [];
-      const json = await res.json();
+      const json = await apiFetch(`/search/albums?query=${encodeURIComponent(q)}&page=1&limit=50`);
+      if (!json) return [];
       const results = json.data?.results || [];
       return results.map((a: {
         id: string;
@@ -218,9 +230,8 @@ export const SearchOverlay = ({ onClose }: SearchOverlayProps) => {
 
   const searchArtists = useCallback(async (q: string) => {
     try {
-      const res = await fetch(`${API_BASE}/search/artists?query=${encodeURIComponent(q)}&page=1&limit=50`);
-      if (!res.ok) return [];
-      const json = await res.json();
+      const json = await apiFetch(`/search/artists?query=${encodeURIComponent(q)}&page=1&limit=50`);
+      if (!json) return [];
       const results = json.data?.results || [];
       return results.map((a: {
         id: string;
@@ -241,9 +252,8 @@ export const SearchOverlay = ({ onClose }: SearchOverlayProps) => {
 
   const searchPlaylists = useCallback(async (q: string) => {
     try {
-      const res = await fetch(`${API_BASE}/search/playlists?query=${encodeURIComponent(q)}&page=1&limit=50`);
-      if (!res.ok) return [];
-      const json = await res.json();
+      const json = await apiFetch(`/search/playlists?query=${encodeURIComponent(q)}&page=1&limit=50`);
+      if (!json) return [];
       return (json.data?.results || []).map((p: {
         id: string;
         name: string;
@@ -260,10 +270,8 @@ export const SearchOverlay = ({ onClose }: SearchOverlayProps) => {
 
   const searchAll = useCallback(async (q: string) => {
     try {
-      const res = await fetch(`${API_BASE}/search/all?query=${encodeURIComponent(q)}`);
-      if (!res.ok) return null;
-      const json = await res.json();
-      return json.data || null;
+      const json = await apiFetch(`/search/all?query=${encodeURIComponent(q)}`);
+      return json?.data || null;
     } catch { return null; }
   }, []);
 
@@ -347,9 +355,8 @@ export const SearchOverlay = ({ onClose }: SearchOverlayProps) => {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/search/songs?query=${encodeURIComponent(q)}&page=1&limit=5`);
-      if (!res.ok) return;
-      const json = await res.json();
+      const json = await apiFetch(`/search/songs?query=${encodeURIComponent(q)}&page=1&limit=5`);
+      if (!json) return;
       const results = json.data?.results || [];
       const names = results.map((s: { name: string }) => s.name).filter(Boolean);
       setSuggestions([...new Set(names)].slice(0, 5) as string[]);
@@ -406,9 +413,8 @@ export const SearchOverlay = ({ onClose }: SearchOverlayProps) => {
   const fetchArtistSongs = async (artistName: string) => {
     setArtistLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/search/songs?query=${encodeURIComponent(artistName)}&page=1&limit=20`);
-      if (!res.ok) { setArtistLoading(false); return; }
-      const json = await res.json();
+      const json = await apiFetch(`/search/songs?query=${encodeURIComponent(artistName)}&page=1&limit=20`);
+      if (!json) { setArtistLoading(false); return; }
       const results = (json.data?.results || []).filter((s: { downloadUrl?: unknown[] }) => s.downloadUrl?.length > 0);
       const tracks: Track[] = [];
       results.slice(0, 15).forEach((s: {
@@ -432,9 +438,8 @@ export const SearchOverlay = ({ onClose }: SearchOverlayProps) => {
   const fetchAlbumSongs = async (albumId: string, albumName: string) => {
     setAlbumLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/albums?id=${albumId}`);
-      if (!res.ok) { setAlbumLoading(false); return; }
-      const json = await res.json();
+      const json = await apiFetch(`/albums?id=${albumId}`);
+      if (!json) { setAlbumLoading(false); return; }
       const songs = json.data?.songs || [];
       const albumImage = json.data?.image?.find((img: { quality: string }) => img.quality === "500x500")?.link ||
                          json.data?.image?.find((img: { quality: string }) => img.quality === "150x150")?.link || "";
