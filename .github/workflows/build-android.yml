@@ -31,9 +31,6 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Prebuild Android
-        run: npx expo prebuild --platform android --clean
-
       - name: Build Release APK
         run: cd android && ./gradlew :app:assembleRelease --no-daemon
 
