@@ -63,7 +63,9 @@
           "savePhotosPermission": "Allow Sonic Bloom to save music to your device.",
           "isAccessMediaLocationEnabled": true
         }
-      ]
+      ],
+      "react-native-track-player",
+      "react-native-volume-manager"
     ],
     "extra": {
       "eas": {

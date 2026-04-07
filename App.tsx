@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, SafeAreaView, ActivityIndicator, Text } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, Text } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -116,27 +117,34 @@ const RootNavigator = () => {
   );
 };
 
+// Define the custom error handler globally but register it in useEffect
+let originalErrorHandlerRegistered = false;
+let originalErrorHandler: ((error: any, isFatal?: boolean) => void) | null = null;
+
 // App Root with Error Boundary
 export default function App() {
   const [splashFinished, setSplashFinished] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    if (originalErrorHandlerRegistered) return;
+
     const errorHandler = (error: Error) => {
       console.error('[App] Error:', error);
       setError(error);
     };
 
-    // Global error handler
-    const originalHandler = ErrorUtils.getGlobalHandler();
+    // Global error handler setup
+    originalErrorHandler = ErrorUtils.getGlobalHandler();
     ErrorUtils.setGlobalHandler((error, isFatal) => {
       errorHandler(error);
-      originalHandler(error, isFatal);
+      if (originalErrorHandler) originalErrorHandler(error, isFatal);
     });
 
-    return () => {
-      ErrorUtils.setGlobalHandler(originalHandler);
-    };
+    originalErrorHandlerRegistered = true;
+    
+    // Recovery mechanism: wait 5 seconds and if it's a transient error, maybe clear it
+    // But for startup crashes, we just want to show the error screen instead of fully crashing
   }, []);
 
   const handleSplashFinish = () => {
@@ -153,23 +161,25 @@ export default function App() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <PlayerProvider>
-          <DownloadsProvider>
-            <LikedSongsProvider>
-              <PlaylistsProvider>
-              <SafeAreaView style={styles.safeArea}>
-                {!splashFinished && <SplashScreen onFinish={handleSplashFinish} />}
-                <RootNavigator />
-                <StatusBar style="light" />
-              </SafeAreaView>
-              </PlaylistsProvider>
-            </LikedSongsProvider>
-          </DownloadsProvider>
-        </PlayerProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <PlayerProvider>
+            <DownloadsProvider>
+              <LikedSongsProvider>
+                <PlaylistsProvider>
+                <SafeAreaView style={styles.safeArea}>
+                  {!splashFinished && <SplashScreen onFinish={handleSplashFinish} />}
+                  <RootNavigator />
+                  <StatusBar style="light" />
+                </SafeAreaView>
+                </PlaylistsProvider>
+              </LikedSongsProvider>
+            </DownloadsProvider>
+          </PlayerProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }
 

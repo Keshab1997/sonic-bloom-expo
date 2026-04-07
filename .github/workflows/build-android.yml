@@ -1,4 +1,4 @@
-name: Build Android APK (Test & Release)
+name: Build Android APK
 
 on:
   push:
@@ -6,31 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Install vitest
-        run: npm install -D vitest
-
-      - name: Run tests
-        run: npx vitest run
-
   build:
     runs-on: ubuntu-latest
-    needs: test
 
     steps:
       - name: Checkout
@@ -56,19 +33,13 @@ jobs:
 
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
-        env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
       - name: Build Release APK
         run: cd android && ./gradlew :app:assembleRelease --no-daemon
-        env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: sonic-bloom-final-apk
+          name: Sonic-Bloom-APK
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 7

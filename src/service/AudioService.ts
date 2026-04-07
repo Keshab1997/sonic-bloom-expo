@@ -27,13 +27,20 @@ export class AudioService {
       }
       
       // Set up TrackPlayer
-      await TrackPlayer.setupPlayer({
-        waitForBuffer: true,
-      });
+      try {
+        await TrackPlayer.setupPlayer({
+          waitForBuffer: true,
+        });
+      } catch (setupError) {
+        // If already initialized, this might throw, which is fine
+        console.log('[AudioService] setupPlayer caught (might be already initialized):', setupError);
+      }
       
       await TrackPlayer.updateOptions({
         android: {
           appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+          // Add notification icon if available, or use default
+          // notificationIcon: 'ic_launcher' 
         },
         capabilities: [
           Capability.Play,
@@ -51,14 +58,14 @@ export class AudioService {
           Capability.SkipToPrevious,
           Capability.SeekTo,
         ],
-        progressUpdateEventInterval: 1,
+        progressUpdateEventInterval: 2,
       });
 
       this.isInitialized = true;
-      console.log('[AudioService] TrackPlayer Initialized');
-    } catch (setupError) {
-      console.error('[AudioService] Setup error:', setupError);
-      // Don't throw - let app continue without audio
+      console.log('[AudioService] TrackPlayer Initialized Successfully');
+    } catch (globalError) {
+      console.error('[AudioService] Critical setup error:', globalError);
+      // Ensure we mark as initialized so we don't keep trying and crashing
       this.isInitialized = true;
     }
   }
