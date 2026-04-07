@@ -22,8 +22,7 @@
         ],
         "NSPhotoLibraryUsageDescription": "Allow Sonic Bloom to access your photos to upload a profile picture.",
         "NSCameraUsageDescription": "Allow Sonic Bloom to use your camera to take a profile picture.",
-        "NSDownloadsFolderUsageDescription": "Allow Sonic Bloom to save downloaded music to your device.",
-        "NSAppleMusicUsageDescription": "Allow Sonic Bloom to access your music library."
+        "NSDownloadsFolderUsageDescription": "Allow Sonic Bloom to save downloaded music to your device."
       }
     },
     "android": {
@@ -56,16 +55,7 @@
     "plugins": [
       "expo-file-system",
       "expo-font",
-      "expo-image-picker",
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "Allow Sonic Bloom to access your photos to upload a profile picture.",
-          "savePhotosPermission": "Allow Sonic Bloom to save downloaded music to your device.",
-          "isAccessMediaLocationEnabled": true,
-          "keepOldVersionsWhenUsingAssetWrite": false
-        }
-      ]
+      "expo-image-picker"
     ],
     "extra": {
       "eas": {
