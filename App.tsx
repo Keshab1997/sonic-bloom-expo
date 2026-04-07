@@ -134,17 +134,15 @@ export default function App() {
       setError(error);
     };
 
-    // Global error handler setup
-    originalErrorHandler = ErrorUtils.getGlobalHandler();
-    ErrorUtils.setGlobalHandler((error, isFatal) => {
-      errorHandler(error);
-      if (originalErrorHandler) originalErrorHandler(error, isFatal);
-    });
-
-    originalErrorHandlerRegistered = true;
-    
-    // Recovery mechanism: wait 5 seconds and if it's a transient error, maybe clear it
-    // But for startup crashes, we just want to show the error screen instead of fully crashing
+    // Global error handler setup - add safety checks for ErrorUtils
+    if (typeof ErrorUtils !== 'undefined') {
+      originalErrorHandler = ErrorUtils.getGlobalHandler();
+      ErrorUtils.setGlobalHandler((error, isFatal) => {
+        errorHandler(error);
+        if (originalErrorHandler) originalErrorHandler(error, isFatal);
+      });
+      originalErrorHandlerRegistered = true;
+    }
   }, []);
 
   const handleSplashFinish = () => {
@@ -153,10 +151,12 @@ export default function App() {
 
   if (error) {
     return (
-      <SafeAreaView style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Something went wrong</Text>
-        <Text style={styles.errorText}>{error.message}</Text>
-      </SafeAreaView>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorText}>{error.message}</Text>
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
@@ -168,11 +168,14 @@ export default function App() {
             <DownloadsProvider>
               <LikedSongsProvider>
                 <PlaylistsProvider>
-                <SafeAreaView style={styles.safeArea}>
-                  {!splashFinished && <SplashScreen onFinish={handleSplashFinish} />}
-                  <RootNavigator />
+                <View style={styles.container}>
+                  {splashFinished ? (
+                    <RootNavigator />
+                  ) : (
+                    <SplashScreen onFinish={handleSplashFinish} />
+                  )}
                   <StatusBar style="light" />
-                </SafeAreaView>
+                </View>
                 </PlaylistsProvider>
               </LikedSongsProvider>
             </DownloadsProvider>
