@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 import { Platform } from 'react-native';
 import { Track } from '../data/playlist';
 
@@ -175,6 +176,32 @@ export const useDownloads = () => {
       file.write(uint8Array);
       
       console.log(`[useDownloads] Download complete: ${track.title}, size: ${fileSize} bytes`);
+      
+      // Save to phone's Music folder
+      try {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status === 'granted') {
+          const asset = await MediaLibrary.createAssetAsync(file.uri);
+          
+          // Use a unique album name "Sonic Bloom" to avoid conflicts
+          const albums = await MediaLibrary.getAlbumsAsync();
+          let sonicBloomAlbum = albums.find(a => a.title.toLowerCase() === 'sonic bloom');
+          
+          if (!sonicBloomAlbum) {
+            sonicBloomAlbum = await MediaLibrary.createAlbumAsync('Sonic Bloom', asset, false);
+            console.log(`[useDownloads] Created new album: Sonic Bloom`);
+          } else {
+            await MediaLibrary.addAssetsToAlbumAsync([asset], sonicBloomAlbum, false);
+            console.log(`[useDownloads] Added to existing album: Sonic Bloom`);
+          }
+          
+          console.log(`[useDownloads] Saved to phone Music: ${asset.uri}`);
+        } else {
+          console.log(`[useDownloads] Media library permission not granted`);
+        }
+      } catch (mediaError) {
+        console.log(`[useDownloads] Could not save to phone media:`, mediaError);
+      }
       
       setDownloading(prev => ({ ...prev, [trackId]: 100 }));
 
