@@ -61,7 +61,8 @@ export const SearchScreen: React.FC = () => {
           console.log(`[Search] Loaded ${searchCacheRef.current.size} cached searches from storage`);
         }
       } catch (e) {
-        console.error('[Search] Failed to load cache:', e);
+        const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+        console.error('[Search] Failed to load cache:', sanitizedError);
       }
     };
     loadCache();
@@ -78,10 +79,12 @@ export const SearchScreen: React.FC = () => {
     setLoading(true);
     const newPl = await createPlaylist(pName);
     if (newPl) {
+      let savedCount = 0;
       for (let i = 0; i < results.length; i++) {
         await addTrackToPlaylist(newPl.id, results[i], i);
+        savedCount++;
       }
-      showToast(`Saved ${results.length} songs to "${pName}"`, 'success');
+      showToast(`Saved ${savedCount} songs to "${pName}"`, 'success');
       setShowPlaylistModal(false);
       setNewPlaylistName('');
     } else {
@@ -101,10 +104,15 @@ export const SearchScreen: React.FC = () => {
   };
 
   const fetchSongs = useCallback(async (searchQuery: string, page: number, append = false) => {
+    // Validate search query
+    if (!searchQuery || searchQuery.trim().length === 0) {
+      return { tracks: [], hasMore: false, total: 0 };
+    }
+    
     // Check cache first (lifetime validity)
     const cacheKey = `${searchQuery}-${page}`;
     const cached = searchCacheRef.current.get(cacheKey);
-    if (cached) {
+    if (cached && cached.tracks.length > 0) {
       console.log('[Search] Using cached results (lifetime cache)');
       return { tracks: cached.tracks, hasMore: cached.tracks.length >= SONGS_PER_PAGE, total: cached.tracks.length };
     }
@@ -147,16 +155,19 @@ export const SearchScreen: React.FC = () => {
         
         const data = await res.json();
         console.log(`[Search] Got ${data.data?.results?.length || 0} results`);
-      const songs = data.data?.results || [];
+        const songs = data.data?.results || [];
       
       if (songs.length === 0) {
         console.log('[Search] No results in response');
+        // Don't cache empty results
         if (retryCount < maxRetries) {
           retryCount++;
           console.log(`[Search] Empty response, retry ${retryCount}/${maxRetries}`);
           await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
           continue;
         }
+        // Return empty without caching
+        return { tracks: [], hasMore: false, total: 0 };
       }
       
       const total = data.data?.total || songs.length;
@@ -188,7 +199,7 @@ export const SearchScreen: React.FC = () => {
         })
         .filter((t: Track | null): t is Track => t !== null);
         
-        // Cache the results permanently (lifetime cache)
+        // Only cache if we have valid tracks
         if (tracks.length > 0) {
           searchCacheRef.current.set(cacheKey, { tracks, timestamp: Date.now() });
           console.log(`[Search] Cached ${tracks.length} tracks permanently`);
@@ -199,16 +210,23 @@ export const SearchScreen: React.FC = () => {
             await AsyncStorage.setItem('sonic_search_cache', JSON.stringify(cacheObj));
             console.log('[Search] Saved cache to storage');
           } catch (e) {
-            console.error('[Search] Failed to save cache:', e);
+            const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+            console.error('[Search] Failed to save cache:', sanitizedError);
           }
+          
+          return { tracks, hasMore: songs.length >= SONGS_PER_PAGE, total };
+        } else {
+          // No valid tracks found, don't cache
+          console.log('[Search] No valid tracks to cache');
+          return { tracks: [], hasMore: false, total: 0 };
         }
-        
-        return { tracks, hasMore: songs.length >= SONGS_PER_PAGE, total };
       } catch (error: any) {
         if (error.name === 'AbortError') {
           console.log('[Search] Request cancelled or timeout');
           return { tracks: [], hasMore: false, total: 0 };
         }
+        
+        console.error('[Search] Fetch error:', error.message || error);
         
         if (retryCount < maxRetries) {
           retryCount++;
@@ -217,11 +235,12 @@ export const SearchScreen: React.FC = () => {
           continue;
         }
         
+        // All retries failed, return empty
         return { tracks: [], hasMore: false, total: 0 };
       }
     }
     
-    console.log('[Search] All attempts exhausted');
+    console.log('[Search] All attempts exhausted, no results');
     return { tracks: [], hasMore: false, total: 0 };
   }, []);
 
@@ -276,7 +295,8 @@ export const SearchScreen: React.FC = () => {
           }
         } catch (error: any) {
           if (error.name !== 'AbortError') {
-            console.error('[Search Artists] Error:', error);
+            const sanitizedError = error instanceof Error ? error.message.replace(/[\r\n]/g, ' ') : String(error).replace(/[\r\n]/g, ' ');
+            console.error('[Search Artists] Error:', sanitizedError);
           }
         }
         setResults([]);
@@ -324,7 +344,8 @@ export const SearchScreen: React.FC = () => {
           }
         } catch (error: any) {
           if (error.name !== 'AbortError') {
-            console.error('[Search Albums] Error:', error);
+            const sanitizedError = error instanceof Error ? error.message.replace(/[\r\n]/g, ' ') : String(error).replace(/[\r\n]/g, ' ');
+            console.error('[Search Albums] Error:', sanitizedError);
           }
         }
         setArtistResults([]);
@@ -366,8 +387,21 @@ export const SearchScreen: React.FC = () => {
     setLoadingAlbum(true);
     setSelectedAlbum({ id: albumId, name: albumName });
     setAlbumSongs([]);
+    
+    // Validate inputs to prevent SSRF
+    if (!albumId || typeof albumId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(albumId)) {
+      console.error('Invalid album ID');
+      setLoadingAlbum(false);
+      return;
+    }
+    if (!albumName || typeof albumName !== 'string' || albumName.length > 200) {
+      console.error('Invalid album name');
+      setLoadingAlbum(false);
+      return;
+    }
+    
     try {
-      const res = await fetch(`${API_BASE}/albums?id=${albumId}`);
+      const res = await fetch(`${API_BASE}/albums?id=${encodeURIComponent(albumId)}`);
       if (res.ok) {
         const data = await res.json();
         const songs = data.data?.songs || [];
@@ -403,9 +437,12 @@ export const SearchScreen: React.FC = () => {
           return;
         }
       }
-    } catch (e) { console.log('Album fetch error:', e); }
+    } catch (e) {
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.log('Album fetch error:', sanitizedError);
+    }
     try {
-      const res = await fetch(`${API_BASE}/playlists?id=${albumId}`);
+      const res = await fetch(`${API_BASE}/playlists?id=${encodeURIComponent(albumId)}`);
       if (res.ok) {
         const data = await res.json();
         const songs = data.data?.songs || [];
@@ -434,7 +471,10 @@ export const SearchScreen: React.FC = () => {
           return;
         }
       }
-    } catch {}
+    } catch (e) {
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.log('Playlist fetch error:', sanitizedError);
+    }
     try {
       const res = await fetch(`${API_BASE}/search/songs?query=${encodeURIComponent(albumName)}&page=1&limit=50`);
       if (res.ok) {
@@ -461,7 +501,10 @@ export const SearchScreen: React.FC = () => {
           .filter((t: Track | null): t is Track => t !== null);
         setAlbumSongs(tracks);
       }
-    } catch {}
+    } catch (e) {
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.log('Search fallback error:', sanitizedError);
+    }
     setLoadingAlbum(false);
   }, []);
 
@@ -757,8 +800,10 @@ export const SearchScreen: React.FC = () => {
                             setHasMore(true);
                             showToast(`Loaded ${tracks.length} new songs`, 'info');
                           }
-                        } catch {
+                        } catch (e) {
+                          const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
                           showToast('Failed to load more songs', 'error');
+                          console.error('[SearchScreen] Next page error:', sanitizedError);
                         }
                         setLoading(false);
                       }}

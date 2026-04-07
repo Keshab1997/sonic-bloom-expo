@@ -66,17 +66,23 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null;
   }
 
+  // Sanitize id and config values to prevent XSS
+  const sanitizeCSS = (str: string) => str.replace(/[<>"'&]/g, '');
+  const sanitizedId = sanitizeCSS(id);
+
   return (
     <style
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(
             ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
+${prefix} [data-chart=${sanitizedId}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
     const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
+    const sanitizedKey = sanitizeCSS(key);
+    const sanitizedColor = color ? sanitizeCSS(color) : null;
+    return sanitizedColor ? `  --color-${sanitizedKey}: ${sanitizedColor};` : null;
   })
   .join("\n")}
 }

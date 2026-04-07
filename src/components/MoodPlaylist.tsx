@@ -82,7 +82,9 @@ export const MoodPlaylist = ({ moodName, emoji, searchQuery, gradient, onClose }
     if (pageNum === 1) setLoading(true);
     else setLoadingMore(true);
 
-    console.log(`[MoodPlaylist] 🎵 Fetching songs for mood: "${moodName}" | Query: "${searchQuery}" | Page: ${pageNum}`);
+    const sanitizedMood = moodName.replace(/[\r\n]/g, ' ');
+    const sanitizedQuery = searchQuery.replace(/[\r\n]/g, ' ');
+    console.log(`[MoodPlaylist] 🎵 Fetching songs for mood: "${sanitizedMood}" | Query: "${sanitizedQuery}" | Page: ${pageNum}`);
 
     try {
       const res = await fetch(
@@ -95,7 +97,7 @@ export const MoodPlaylist = ({ moodName, emoji, searchQuery, gradient, onClose }
       const data = await res.json();
       const results = data.data?.results || [];
 
-      console.log(`[MoodPlaylist] ✅ Mood: "${moodName}" | Page ${pageNum} returned ${results.length} songs`);
+      console.log(`[MoodPlaylist] ✅ Mood: "${sanitizedMood}" | Page ${pageNum} returned ${results.length} songs`);
 
       if (results.length === 0) {
         setHasMore(false);
@@ -130,16 +132,16 @@ export const MoodPlaylist = ({ moodName, emoji, searchQuery, gradient, onClose }
       if (append) {
         setSongs((prev) => {
           const updated = [...prev, ...tracksToSet];
-          console.log(`[MoodPlaylist] 📋 Mood: "${moodName}" | Total displayed songs: ${updated.length}`);
+          console.log(`[MoodPlaylist] 📋 Mood: "${sanitizedMood}" | Total displayed songs: ${updated.length}`);
           return updated;
         });
       } else {
         setSongs(tracksToSet);
-        console.log(`[MoodPlaylist] 📋 Mood: "${moodName}" | Displayed songs reset to: ${tracksToSet.length}`);
+        console.log(`[MoodPlaylist] 📋 Mood: "${sanitizedMood}" | Displayed songs reset to: ${tracksToSet.length}`);
       }
 
       if (results.length < 20) {
-        console.log(`[MoodPlaylist] 🏁 Mood: "${moodName}" | No more pages available (got ${results.length} < 20)`);
+        console.log(`[MoodPlaylist] 🏁 Mood: "${sanitizedMood}" | No more pages available (got ${results.length} < 20)`);
         setHasMore(false);
       }
     } catch { /* ignore */ }
@@ -150,7 +152,9 @@ export const MoodPlaylist = ({ moodName, emoji, searchQuery, gradient, onClose }
 
   // Initial load
   useEffect(() => {
-    console.log(`[MoodPlaylist] 🚀 MoodPlaylist opened | Mood: "${moodName}" | Search Query: "${searchQuery}"`);
+    const sanitizedMood = moodName.replace(/[\r\n]/g, ' ');
+    const sanitizedQuery = searchQuery.replace(/[\r\n]/g, ' ');
+    console.log(`[MoodPlaylist] 🚀 MoodPlaylist opened | Mood: "${sanitizedMood}" | Search Query: "${sanitizedQuery}"`);
     fetchSongs(1, false);
   }, [fetchSongs]);
 

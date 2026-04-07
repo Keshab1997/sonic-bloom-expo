@@ -32,7 +32,8 @@ export const useSearchHistory = () => {
         setSearchHistory(JSON.parse(data));
       }
     } catch (e) {
-      console.log('[useSearchHistory] Load local error:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.log('[useSearchHistory] Load local error:', sanitizedError);
     }
   };
 
@@ -64,7 +65,8 @@ export const useSearchHistory = () => {
         setSearchHistory(JSON.parse(data));
       }
     } catch (e) {
-      console.log('[useSearchHistory] Load error:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.log('[useSearchHistory] Load error:', sanitizedError);
     }
   };
 
@@ -92,7 +94,8 @@ export const useSearchHistory = () => {
         });
         console.log('[useSearchHistory] Saved to Supabase:', { error });
       } catch (e) {
-        console.log('[useSearchHistory] Supabase save error:', e);
+        const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+        console.log('[useSearchHistory] Supabase save error:', sanitizedError);
       }
     }
   }, [user]);

@@ -47,7 +47,8 @@ export const useSearchCache = () => {
         loadFromSupabase();
       }
     } catch (e) {
-      console.log('[useSearchCache] Load error:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.log('[useSearchCache] Load error:', sanitizedError);
     }
   };
 
@@ -82,7 +83,8 @@ export const useSearchCache = () => {
         });
       }
     } catch (e) {
-      console.log('[useSearchCache] Supabase load error:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.log('[useSearchCache] Supabase load error:', sanitizedError);
     }
   };
 
@@ -101,7 +103,8 @@ export const useSearchCache = () => {
     try {
       await AsyncStorage.setItem(`${SEARCH_CACHE_KEY}${query.trim().toLowerCase()}`, JSON.stringify(cacheItem));
     } catch (e) {
-      console.log('[useSearchCache] Local save error:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.log('[useSearchCache] Local save error:', sanitizedError);
     }
 
     // Update state
@@ -125,7 +128,8 @@ export const useSearchCache = () => {
         
         console.log('[useSearchCache] Supabase save:', { error });
       } catch (e) {
-        console.log('[useSearchCache] Supabase save error:', e);
+        const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+        console.log('[useSearchCache] Supabase save error:', sanitizedError);
       }
     }
   }, [user]);

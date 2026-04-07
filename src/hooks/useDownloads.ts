@@ -4,9 +4,11 @@ import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { Platform } from 'react-native';
 import { Track } from '../data/playlist';
+import { toast } from './use-toast';
 
 const DOWNLOADS_KEY_PREFIX = 'sonic_downloads_';
 const STORAGE_LOCATION_KEY = 'sonic_storage_location';
+const MEDIA_PERMISSION_KEY = 'sonic_media_permission_granted';
 
 export type StorageLocation = 'internal' | 'external';
 
@@ -23,6 +25,7 @@ export const useDownloads = () => {
   const [storageLocation, setStorageLocation] = useState<StorageLocation>('internal');
   const validDownloadsRef = useRef<DownloadedTrack[]>([]);
   const storageLocationRef = useRef<StorageLocation>('internal');
+  const mediaPermissionGrantedRef = useRef(false);
 
   const getStorageKey = useCallback(() => {
     return 'sonic_downloads_guest';
@@ -40,20 +43,29 @@ export const useDownloads = () => {
       await AsyncStorage.setItem(STORAGE_LOCATION_KEY, location);
       setStorageLocation(location);
       storageLocationRef.current = location;
-      console.log(`[useDownloads] Storage location changed to: ${location}`);
+      const sanitizedLocation = location.replace(/[\r\n]/g, ' ');
+      console.log(`[useDownloads] Storage location changed to: ${sanitizedLocation}`);
     } catch (e) {
-      console.error('Failed to change storage location:', e);
+      const sanitizedError = {
+        message: (e as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+        name: (e as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+      };
+      console.error('Failed to change storage location:', sanitizedError);
     }
   }, []);
 
   useEffect(() => {
-    // Load storage location preference
+    // Load storage location preference and media permission status
     const loadStorageLocation = async () => {
       try {
         const location = await AsyncStorage.getItem(STORAGE_LOCATION_KEY);
         if (location === 'external' || location === 'internal') {
           setStorageLocation(location);
           storageLocationRef.current = location;
+        }
+        const permissionStatus = await AsyncStorage.getItem(MEDIA_PERMISSION_KEY);
+        if (permissionStatus === 'true') {
+          mediaPermissionGrantedRef.current = true;
         }
       } catch (e) {
         console.error('Failed to load storage location:', e);
@@ -128,8 +140,22 @@ export const useDownloads = () => {
     // Use songId (JioSaavn ID) as the unique identifier, fallback to track.id
     const trackId = String(track.songId || track.id);
     
-    if (!track?.src || !trackId || isDownloaded(trackId)) {
-      console.log(`[useDownloads] Skip download: ${track.title} - Already downloaded or invalid`);
+    if (!track?.src || !trackId) {
+      const sanitizedTitle = track.title?.replace(/[\r\n]/g, ' ') || 'Unknown';
+      console.log(`[useDownloads] Skip download: ${sanitizedTitle} - Invalid track`);
+      return;
+    }
+
+    // Check if already downloaded or downloading
+    if (isDownloaded(trackId)) {
+      const sanitizedTitle = track.title?.replace(/[\r\n]/g, ' ') || 'Unknown';
+      console.log(`[useDownloads] Skip download: ${sanitizedTitle} - Already downloaded`);
+      return;
+    }
+
+    if (isDownloading(trackId)) {
+      const sanitizedTitle = track.title?.replace(/[\r\n]/g, ' ') || 'Unknown';
+      console.log(`[useDownloads] Skip download: ${sanitizedTitle} - Already downloading`);
       return;
     }
 
@@ -138,7 +164,9 @@ export const useDownloads = () => {
     try {
       // Get download directory based on user preference
       const downloadDir = getDownloadDirectory();
-      console.log(`[useDownloads] Download directory: ${downloadDir}, location: ${storageLocationRef.current}`);
+      const sanitizedDir = downloadDir.replace(/[\r\n]/g, ' ');
+      const sanitizedLocation = String(storageLocationRef.current).replace(/[\r\n]/g, ' ');
+      console.log(`[useDownloads] Download directory: ${sanitizedDir}, location: ${sanitizedLocation}`);
       
       // Create downloads directory if it doesn't exist using new API
       const dir = new FileSystem.Directory(downloadDir);
@@ -153,7 +181,8 @@ export const useDownloads = () => {
       const safeTitle = (track.title || 'unknown').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
       const fileName = `${trackId}_${safeTitle}.mp3`;
       const file = new FileSystem.File(downloadDir, fileName);
-      console.log(`[useDownloads] Downloading to: ${file.uri}`);
+      const sanitizedUri = file.uri.replace(/[\r\n]/g, ' ');
+      console.log(`[useDownloads] Downloading to: ${sanitizedUri}`);
 
       setDownloading(prev => ({ ...prev, [trackId]: 25 }));
       
@@ -175,32 +204,58 @@ export const useDownloads = () => {
       await file.create({ overwrite: true });
       file.write(uint8Array);
       
-      console.log(`[useDownloads] Download complete: ${track.title}, size: ${fileSize} bytes`);
+      const sanitizedTitle = track.title?.replace(/[\r\n]/g, ' ') || 'Unknown';
+      console.log(`[useDownloads] Download complete: ${sanitizedTitle}, size: ${fileSize} bytes`);
       
       // Save to phone's Music folder
       try {
-        const { status } = await MediaLibrary.requestPermissionsAsync();
-        if (status === 'granted') {
-          const asset = await MediaLibrary.createAssetAsync(file.uri);
-          
-          // Use a unique album name "Sonic Bloom" to avoid conflicts
-          const albums = await MediaLibrary.getAlbumsAsync();
-          let sonicBloomAlbum = albums.find(a => a.title.toLowerCase() === 'sonic bloom');
-          
-          if (!sonicBloomAlbum) {
-            sonicBloomAlbum = await MediaLibrary.createAlbumAsync('Sonic Bloom', asset, false);
-            console.log(`[useDownloads] Created new album: Sonic Bloom`);
+        // Check current permission status first
+        const { status: currentStatus } = await MediaLibrary.getPermissionsAsync();
+        
+        if (currentStatus !== 'granted') {
+          // Only request permission if not already granted
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status === 'granted') {
+            mediaPermissionGrantedRef.current = true;
+            await AsyncStorage.setItem(MEDIA_PERMISSION_KEY, 'true');
           } else {
-            await MediaLibrary.addAssetsToAlbumAsync([asset], sonicBloomAlbum, false);
-            console.log(`[useDownloads] Added to existing album: Sonic Bloom`);
+            console.log(`[useDownloads] Media library permission denied - saving to app storage only`);
+            setDownloading(prev => ({ ...prev, [trackId]: 100 }));
+            const newDownload = { track, localUri: file.uri, downloadedAt: Date.now(), fileSize };
+            setDownloads(prev => {
+              const newDownloads = [...prev, newDownload];
+              saveDownloads(newDownloads);
+              return newDownloads;
+            });
+            return;
           }
-          
-          console.log(`[useDownloads] Saved to phone Music: ${asset.uri}`);
         } else {
-          console.log(`[useDownloads] Media library permission not granted`);
+          mediaPermissionGrantedRef.current = true;
         }
+
+        // Only save to MediaLibrary if we have permission
+        const asset = await MediaLibrary.createAssetAsync(file.uri);
+        
+        // Use a unique album name "Sonic Bloom" to avoid conflicts
+        const albums = await MediaLibrary.getAlbumsAsync();
+        let sonicBloomAlbum = albums.find(a => a.title.toLowerCase() === 'sonic bloom');
+        
+        if (!sonicBloomAlbum) {
+          sonicBloomAlbum = await MediaLibrary.createAlbumAsync('Sonic Bloom', asset, false);
+          console.log(`[useDownloads] Created new album: Sonic Bloom`);
+        } else {
+          await MediaLibrary.addAssetsToAlbumAsync([asset], sonicBloomAlbum, false);
+          console.log(`[useDownloads] Added to existing album: Sonic Bloom`);
+        }
+        
+        const sanitizedAssetUri = asset.uri.replace(/[\r\n]/g, ' ');
+        console.log(`[useDownloads] Saved to phone Music: ${sanitizedAssetUri}`);
       } catch (mediaError) {
-        console.log(`[useDownloads] Could not save to phone media:`, mediaError);
+        const sanitizedError = {
+          message: (mediaError as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+          name: (mediaError as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+        };
+        console.log(`[useDownloads] Could not save to phone media:`, sanitizedError);
       }
       
       setDownloading(prev => ({ ...prev, [trackId]: 100 }));
@@ -210,11 +265,26 @@ export const useDownloads = () => {
       setDownloads(prev => {
         const newDownloads = [...prev, newDownload];
         saveDownloads(newDownloads);
-        console.log(`[useDownloads] Saved download: ${track.title}, Total: ${newDownloads.length}`);
+        const sanitizedTitle = track.title?.replace(/[\r\n]/g, ' ') || 'Unknown';
+        console.log(`[useDownloads] Saved download: ${sanitizedTitle}, Total: ${newDownloads.length}`);
+        toast({
+          title: 'Download Complete',
+          description: track.title || 'Track',
+        });
         return newDownloads;
       });
     } catch (e) {
-      console.error(`[useDownloads] Failed to download ${track.title}:`, e);
+      const sanitizedTitle = track.title?.replace(/[\r\n]/g, ' ') || 'Unknown';
+      const sanitizedError = {
+        message: (e as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+        name: (e as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+      };
+      console.error(`[useDownloads] Failed to download ${sanitizedTitle}:`, sanitizedError);
+      toast({
+        title: 'Download Failed',
+        description: sanitizedTitle,
+        variant: 'destructive'
+      });
     } finally {
       setDownloading(prev => { const n = { ...prev }; delete n[trackId]; return n; });
     }
@@ -240,6 +310,10 @@ export const useDownloads = () => {
       return String(dSongId) !== String(trackId);
     });
     await saveDownloads(newDownloads);
+    toast({
+      title: 'Download Deleted',
+      description: downloaded.track.title || 'Track',
+    });
   };
 
   const deleteAll = async () => {
@@ -255,6 +329,10 @@ export const useDownloads = () => {
     }
 
     await saveDownloads([]);
+    toast({
+      title: 'All Downloads Deleted',
+      description: 'All downloaded tracks have been removed',
+    });
   };
 
   const getDownloadProgress = useCallback((trackId: string) => {

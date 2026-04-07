@@ -45,8 +45,18 @@ export const ArtistDetailScreen: React.FC = () => {
     const allTracks: Track[] = [];
     const seenIds = new Set<string>();
     try {
+      // Validate artistName to prevent SSRF
+      if (!artistName || typeof artistName !== 'string' || artistName.length > 200) {
+        console.error('Invalid artist name');
+        setLoading(false);
+        return;
+      }
+      
       // 1. Fetch from JioSaavn
       for (let page = 1; page <= 10; page++) {
+        // Validate page parameter
+        if (!Number.isInteger(page) || page < 1 || page > 10) break;
+        
         const res = await fetch(`${API_BASE}/search/songs?query=${encodeURIComponent(artistName)}&page=${page}&limit=50`);
         if (!res.ok) break;
         const data = await res.json();

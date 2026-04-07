@@ -46,7 +46,11 @@ export const usePlaylists = () => {
         console.log('[usePlaylists] Playlists result:', { count: playlistsData?.length, error: playlistsError });
         
         if (playlistsError) {
-          console.error('[usePlaylists] Playlists error:', playlistsError);
+          const sanitizedError = {
+            message: playlistsError?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+            code: playlistsError?.code?.replace(/[\r\n]/g, ' ') || 'Unknown'
+          };
+          console.error('[usePlaylists] Playlists error:', sanitizedError);
         }
         
         if (playlistsData && playlistsData.length > 0) {
@@ -99,7 +103,8 @@ export const usePlaylists = () => {
         setPlaylists([]);
       }
     } catch (e) {
-      console.error('Failed to load playlists:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.error('Failed to load playlists:', sanitizedError);
     } finally {
       setLoading(false);
     }
@@ -130,7 +135,8 @@ export const usePlaylists = () => {
         return newPlaylist;
       }
     } catch (e) {
-      console.error('[usePlaylists] Failed to create playlist:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.error('[usePlaylists] Failed to create playlist:', sanitizedError);
     }
     return null;
   };
@@ -143,23 +149,42 @@ export const usePlaylists = () => {
       const key = getStorageKey();
       if (key) await AsyncStorage.setItem(key, JSON.stringify(updated));
     } catch (e) {
-      console.error('Failed to delete playlist:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.error('Failed to delete playlist:', sanitizedError);
     }
   };
 
   const addTrackToPlaylist = async (playlistId: string, track: Track, position?: number) => {
     try {
+      const trackId = String(track.id);
+      
+      const { data: existing } = await supabase
+        .from('playlist_tracks')
+        .select('track_id')
+        .eq('playlist_id', playlistId)
+        .eq('track_id', trackId)
+        .maybeSingle();
+      
+      if (existing) {
+        console.log('[usePlaylists] Track already in playlist');
+        return;
+      }
+
       const pos = position ?? playlists.find(p => p.id === playlistId)?.tracks.length ?? 0;
 
       const { error } = await supabase.from('playlist_tracks').insert({
         playlist_id: playlistId,
-        track_id: String(track.id),
+        track_id: trackId,
         track_data: track,
         position: pos,
       });
 
       if (error) {
-        console.error('[usePlaylists] Supabase error:', error);
+        const sanitizedError = {
+          message: error?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+          code: error?.code?.replace(/[\r\n]/g, ' ') || 'Unknown'
+        };
+        console.error('[usePlaylists] Supabase error:', sanitizedError);
         return;
       }
 
@@ -174,7 +199,8 @@ export const usePlaylists = () => {
         return updated;
       });
     } catch (e) {
-      console.error('[usePlaylists] Failed to add track to playlist:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.error('[usePlaylists] Failed to add track to playlist:', sanitizedError);
     }
   };
 
@@ -192,7 +218,8 @@ export const usePlaylists = () => {
       const key = getStorageKey();
       if (key) await AsyncStorage.setItem(key, JSON.stringify(updated));
     } catch (e) {
-      console.error('Failed to remove track from playlist:', e);
+      const sanitizedError = e instanceof Error ? e.message.replace(/[\r\n]/g, ' ') : String(e).replace(/[\r\n]/g, ' ');
+      console.error('Failed to remove track from playlist:', sanitizedError);
     }
   };
 

@@ -40,7 +40,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }).catch((error) => {
       if (mounted) {
-        console.error('Failed to get session:', error);
+        const sanitizedError = {
+          message: error?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+          name: error?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+        };
+        console.error('Failed to get session:', sanitizedError);
         setLoading(false)
         clearTimeout(timeoutId);
       }

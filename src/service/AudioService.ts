@@ -24,8 +24,19 @@ export class AudioService {
           Capability.SkipToNext,
           Capability.SkipToPrevious,
           Capability.SeekTo,
+          Capability.Stop,
         ],
-        compactCapabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext],
+        compactCapabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext, Capability.SkipToPrevious],
+        // Enable notification on lock screen with seek capability
+        notificationCapabilities: [
+          Capability.Play,
+          Capability.Pause,
+          Capability.SkipToNext,
+          Capability.SkipToPrevious,
+          Capability.SeekTo,
+        ],
+        // Enable progress bar on lock screen
+        progressUpdateEventInterval: 1,
       });
 
       this.isInitialized = true;
@@ -48,6 +59,36 @@ export class AudioService {
       duration: track.duration,
     });
     await TrackPlayer.play();
+  }
+
+  async playQueue(tracks: Track[], startIndex: number = 0, quality: AudioQuality = '160kbps') {
+    await TrackPlayer.reset();
+    
+    const queueItems = tracks.slice(startIndex).map((track, index) => ({
+      id: `${track.id}_${index}`,
+      url: this.getAudioUrl(track, quality),
+      title: track.title,
+      artist: track.artist,
+      artwork: track.cover,
+      duration: track.duration,
+    }));
+    
+    await TrackPlayer.add(queueItems);
+    await TrackPlayer.play();
+  }
+
+  async updateQueue(tracks: Track[], quality: AudioQuality = '160kbps') {
+    const queueItems = tracks.map((track, index) => ({
+      id: `${track.id}_${index}`,
+      url: this.getAudioUrl(track, quality),
+      title: track.title,
+      artist: track.artist,
+      artwork: track.cover,
+      duration: track.duration,
+    }));
+    
+    await TrackPlayer.reset();
+    await TrackPlayer.add(queueItems);
   }
 
   async play() { await TrackPlayer.play(); }

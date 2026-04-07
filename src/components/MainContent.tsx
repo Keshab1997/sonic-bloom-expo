@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -75,7 +75,9 @@ const getSongOfDayIndex = (max: number) => {
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
 const parseGradient = (gradient: string): [string, string] => {
-  const parts = gradient.replace("from-", "").replace("to-", "").split(" ");
+  // Sanitize input to prevent XSS
+  const sanitized = gradient.replace(/[^a-zA-Z0-9\s\-]/g, '');
+  const parts = sanitized.replace("from-", "").replace("to-", "").split(" ");
   const colorMap: Record<string, string> = {
     "rose-600": "#e11d48", "pink-600": "#db2777", "purple-600": "#9333ea",
     "indigo-600": "#4f46e5", "blue-600": "#2563eb", "cyan-600": "#0891b2",
@@ -106,7 +108,7 @@ const SectionHeader = ({ title, icon, rightAction, subtitle }: {
   </View>
 );
 
-const TrackCard = ({ track, index, tracks, onPress, showRank, showBadge, badgeText, badgeColor, onAddToQueue, onDownload, isDownloaded, isDownloading, downloadProgress }: {
+const TrackCard = React.memo(({ track, index, tracks, onPress, showRank, showBadge, badgeText, badgeColor, onAddToQueue, onDownload, isDownloaded, isDownloading, downloadProgress }: {
   track: Track;
   index: number;
   tracks: Track[];
@@ -176,9 +178,9 @@ const TrackCard = ({ track, index, tracks, onPress, showRank, showBadge, badgeTe
     <Text style={styles.trackCardTitle} numberOfLines={1}>{track.title}</Text>
     <Text style={styles.trackCardArtist} numberOfLines={1}>{track.artist}</Text>
   </TouchableOpacity>
-);
+));
 
-const ArtistCircle = ({ image, name, onPress, ringColor }: {
+const ArtistCircle = React.memo(({ image, name, onPress, ringColor }: {
   image: string;
   name: string;
   onPress: () => void;
@@ -193,9 +195,9 @@ const ArtistCircle = ({ image, name, onPress, ringColor }: {
     </View>
     <Text style={styles.artistName} numberOfLines={2}>{name}</Text>
   </TouchableOpacity>
-);
+));
 
-const MoodCard = ({ mood, onPress }: {
+const MoodCard = React.memo(({ mood, onPress }: {
   mood: MoodCategory;
   onPress: () => void;
 }) => (
@@ -208,9 +210,9 @@ const MoodCard = ({ mood, onPress }: {
       </View>
     </LinearGradient>
   </TouchableOpacity>
-);
+));
 
-const EraCard = ({ era, onPress }: {
+const EraCard = React.memo(({ era, onPress }: {
   era: typeof eraCategories[0];
   onPress: () => void;
 }) => (
@@ -223,9 +225,9 @@ const EraCard = ({ era, onPress }: {
       </View>
     </LinearGradient>
   </TouchableOpacity>
-);
+));
 
-const LabelCard = ({ label, onPress, onShuffle, isLoading }: {
+const LabelCard = React.memo(({ label, onPress, onShuffle, isLoading }: {
   label: MusicLabel;
   onPress: () => void;
   onShuffle: () => void;
@@ -246,9 +248,9 @@ const LabelCard = ({ label, onPress, onShuffle, isLoading }: {
       </TouchableOpacity>
     </LinearGradient>
   </TouchableOpacity>
-);
+));
 
-const QuickPickButton = ({ title, desc, query, color, onPress, isLoading, iconColor }: {
+const QuickPickButton = React.memo(({ title, desc, query, color, onPress, isLoading, iconColor }: {
   title: string;
   desc: string;
   query: string;
@@ -280,7 +282,7 @@ const QuickPickButton = ({ title, desc, query, color, onPress, isLoading, iconCo
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 // ─── Main Content Component ───────────────────────────────────────────────────
 
@@ -338,6 +340,11 @@ export const MainContent = () => {
   const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const trendingInitialized = useRef(false);
   const newReleasesInitialized = useRef(false);
+  const trendingSongsRef = useRef(trendingSongs);
+  const newReleasesRef = useRef(newReleases);
+  const carouselStarted = useRef(false);
+  trendingSongsRef.current = trendingSongs;
+  newReleasesRef.current = newReleases;
   const { favorites: artistFavorites } = useArtistFavorites();
   const { downloadTrack, isDownloaded, isDownloading, getDownloadProgress } = useDownloadsContext();
   const { playlists, createPlaylist, addTrackToPlaylist } = usePlaylists();
@@ -353,6 +360,8 @@ export const MainContent = () => {
 
   const DISPLAY_COUNT = 8;
   const DISPLAY_COUNT_MOBILE = 5;
+
+  const sanitizeText = (text: string) => text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').replace(/&/g, '&amp;');
 
   useEffect(() => {
     const API = "https://jiosaavn-api-privatecvc2.vercel.app";
@@ -373,7 +382,7 @@ export const MainContent = () => {
             const url96 = s.downloadUrl?.find((d: { quality: string }) => d.quality === "96kbps")?.link;
             const url160 = s.downloadUrl?.find((d: { quality: string }) => d.quality === "160kbps")?.link;
             const bestUrl = url160 || url96 || s.downloadUrl?.[0]?.link || "";
-            return { id: offset + i, title: s.name?.replace(/"/g, '"').replace(/&/g, "&") || "Unknown", artist: s.primaryArtists || "Unknown", album: typeof s.album === "string" ? s.album : s.album?.name || "", cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link || s.image?.[s.image.length - 1]?.link || "", src: bestUrl, duration: parseInt(String(s.duration)) || 0, type: "audio" as const, songId: s.id } as Track;
+            return { id: offset + i, title: sanitizeText(s.name || "Unknown"), artist: sanitizeText(s.primaryArtists || "Unknown"), album: typeof s.album === "string" ? sanitizeText(s.album) : sanitizeText(s.album?.name || ""), cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link || s.image?.[s.image.length - 1]?.link || "", src: bestUrl, duration: parseInt(String(s.duration)) || 0, type: "audio" as const, songId: s.id } as Track;
           });
         setter(tracks);
       } catch { /* skip */ }
@@ -393,8 +402,8 @@ export const MainContent = () => {
           const url96 = s.downloadUrl?.find((d: { quality: string }) => d.quality === "96kbps")?.link;
           const url160 = s.downloadUrl?.find((d: { quality: string }) => d.quality === "160kbps")?.link;
           return {
-            id: 10000 + i, title: s.name?.replace(/"/g, '"') || "Unknown", artist: s.primaryArtists || "Unknown",
-            album: typeof s.album === "string" ? s.album : s.album?.name || "",
+            id: 10000 + i, title: sanitizeText(s.name || "Unknown"), artist: sanitizeText(s.primaryArtists || "Unknown"),
+            album: typeof s.album === "string" ? sanitizeText(s.album) : sanitizeText(s.album?.name || ""),
             cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link || "",
             src: url160 || url96 || "", duration: parseInt(String(s.duration)) || 0, type: "audio" as const, songId: s.id,
           } as Track;
@@ -404,7 +413,7 @@ export const MainContent = () => {
 
   }, []);
 
-  function getRandomBatch(allTracks: Track[], count: number): Track[] {
+  const getRandomBatch = useCallback((allTracks: Track[], count: number): Track[] => {
     if (allTracks.length <= count) return [...allTracks];
     const shuffled = [...allTracks];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -412,7 +421,7 @@ export const MainContent = () => {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled.slice(0, count);
-  }
+  }, []);
 
   const AUTO_REFRESH_MS = 120000;
 
@@ -421,14 +430,14 @@ export const MainContent = () => {
       trendingInitialized.current = true;
       setDisplayedTrending(getRandomBatch(trendingSongs, DISPLAY_COUNT));
     }
-  }, [trendingSongs.length, getRandomBatch]);
+  }, [trendingSongs.length]);
 
   useEffect(() => {
     if (newReleases.length > 0 && !newReleasesInitialized.current) {
       newReleasesInitialized.current = true;
       setDisplayedNewReleases(getRandomBatch(newReleases, DISPLAY_COUNT));
     }
-  }, [newReleases.length, getRandomBatch]);
+  }, [newReleases.length]);
 
   const refreshTrending = useCallback(() => {
     if (trendingSongs.length === 0) return;
@@ -437,7 +446,7 @@ export const MainContent = () => {
       setDisplayedTrending(getRandomBatch(trendingSongs, DISPLAY_COUNT));
       setShufflingTrending(false);
     }, 500);
-  }, [trendingSongs, getRandomBatch]);
+  }, [trendingSongs]);
 
   const refreshNewReleases = useCallback(() => {
     if (newReleases.length === 0) return;
@@ -466,18 +475,18 @@ export const MainContent = () => {
             const url96 = s.downloadUrl?.find((d: { quality: string }) => d.quality === "96kbps")?.link;
             const url160 = s.downloadUrl?.find((d: { quality: string }) => d.quality === "160kbps")?.link;
             const bestUrl = url160 || url96 || s.downloadUrl?.[0]?.link || "";
-            return { id: offset + i, title: s.name?.replace(/"/g, '"').replace(/&/g, "&") || "Unknown", artist: s.primaryArtists || "Unknown", album: typeof s.album === "string" ? s.album : s.album?.name || "", cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link || s.image?.[s.image.length - 1]?.link || "", src: bestUrl, duration: parseInt(String(s.duration)) || 0, type: "audio" as const, songId: s.id } as Track;
+            return { id: offset + i, title: sanitizeText(s.name || "Unknown"), artist: sanitizeText(s.primaryArtists || "Unknown"), album: typeof s.album === "string" ? sanitizeText(s.album) : sanitizeText(s.album?.name || ""), cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link || s.image?.[s.image.length - 1]?.link || "", src: bestUrl, duration: parseInt(String(s.duration)) || 0, type: "audio" as const, songId: s.id } as Track;
           });
         setter(getRandomBatch(tracks, DISPLAY_COUNT));
       } catch { /* skip */ }
     };
 
     autoRefreshTimerRef.current = setInterval(() => {
-      if (trendingSongs.length > DISPLAY_COUNT) {
-        setDisplayedTrending(getRandomBatch(trendingSongs, DISPLAY_COUNT));
+      if (trendingSongsRef.current.length > DISPLAY_COUNT) {
+        setDisplayedTrending(getRandomBatch(trendingSongsRef.current, DISPLAY_COUNT));
       }
-      if (newReleases.length > DISPLAY_COUNT) {
-        setDisplayedNewReleases(getRandomBatch(newReleases, DISPLAY_COUNT));
+      if (newReleasesRef.current.length > DISPLAY_COUNT) {
+        setDisplayedNewReleases(getRandomBatch(newReleasesRef.current, DISPLAY_COUNT));
       }
       refreshFromAPI(
         ["bengali top hits", "bangla gaan arijit", "anupam roy bengali", "bengali modern songs", "bangla adhunik gaan", "kumar sanu bengali", "bengali romantic songs"],
@@ -489,7 +498,7 @@ export const MainContent = () => {
     return () => {
       if (autoRefreshTimerRef.current) clearInterval(autoRefreshTimerRef.current);
     };
-  }, [trendingSongs, newReleases, getRandomBatch]);
+  }, []);
 
   const timeOfDay = getTimeOfDay();
   const timeData = timeSuggestions[timeOfDay];
@@ -502,14 +511,15 @@ export const MainContent = () => {
   }, [currentTrack?.src, isPlaying, addToListeningHistory, recordPlay]);
 
   useEffect(() => {
-    if (trendingSongs.length === 0) return;
+    if (trendingSongsRef.current.length === 0 || carouselStarted.current) return;
+    carouselStarted.current = true;
     carouselTimerRef.current = setInterval(() => {
-      setCarouselIndex((prev) => (prev + 1) % Math.min(trendingSongs.length, 5));
+      setCarouselIndex((prev) => (prev + 1) % Math.min(trendingSongsRef.current.length, 5));
     }, 5000);
     return () => {
       if (carouselTimerRef.current) clearInterval(carouselTimerRef.current);
     };
-  }, [trendingSongs]);
+  }, []);
 
   const handleSearchAndPlay = useCallback(async (query: string) => {
     setSearchingFor(query);
@@ -536,9 +546,9 @@ export const MainContent = () => {
           const bestUrl = url160 || url96 || url320 || s.downloadUrl?.[0]?.link || "";
           return {
             id: 3000 + i,
-            title: s.name,
-            artist: s.primaryArtists || "Unknown",
-            album: typeof s.album === "string" ? s.album : s.album?.name || "",
+            title: sanitizeText(s.name || "Unknown"),
+            artist: sanitizeText(s.primaryArtists || "Unknown"),
+            album: typeof s.album === "string" ? sanitizeText(s.album) : sanitizeText(s.album?.name || ""),
             cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link || s.image?.[s.image.length - 1]?.link || "",
             src: bestUrl,
             duration: parseInt(String(s.duration)) || 0,
@@ -579,9 +589,9 @@ export const MainContent = () => {
           const url320 = s.downloadUrl?.find((d: { quality: string }) => d.quality === "320kbps")?.link;
           return {
             id: 5100 + page * 20 + i,
-            title: s.name,
-            artist: s.primaryArtists || "Unknown",
-            album: typeof s.album === "string" ? s.album : s.album?.name || "",
+            title: sanitizeText(s.name || "Unknown"),
+            artist: sanitizeText(s.primaryArtists || "Unknown"),
+            album: typeof s.album === "string" ? sanitizeText(s.album) : sanitizeText(s.album?.name || ""),
             cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link || "",
             src: url160 || url96 || url320 || s.downloadUrl?.[0]?.link || "",
             duration: parseInt(String(s.duration)) || 0,
@@ -638,9 +648,9 @@ export const MainContent = () => {
           const url320 = s.downloadUrl?.find((d: { quality: string }) => d.quality === "320kbps")?.link;
           return {
             id: 6100 + page * 20 + i,
-            title: s.name,
-            artist: s.primaryArtists || "Unknown",
-            album: typeof s.album === "string" ? s.album : s.album?.name || "",
+            title: sanitizeText(s.name || "Unknown"),
+            artist: sanitizeText(s.primaryArtists || "Unknown"),
+            album: typeof s.album === "string" ? sanitizeText(s.album) : sanitizeText(s.album?.name || ""),
             cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link || "",
             src: url160 || url96 || url320 || s.downloadUrl?.[0]?.link || "",
             duration: parseInt(String(s.duration)) || 0,
@@ -682,9 +692,9 @@ export const MainContent = () => {
     if (!bestUrl) return null;
     return {
       id: 20000 + offset,
-      title: s.name,
-      artist: s.primaryArtists || "Unknown",
-      album: typeof s.album === "string" ? s.album : s.album?.name || "",
+      title: sanitizeText(s.name || "Unknown"),
+      artist: sanitizeText(s.primaryArtists || "Unknown"),
+      album: typeof s.album === "string" ? sanitizeText(s.album) : sanitizeText(s.album?.name || ""),
       cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link ||
              s.image?.[s.image.length - 1]?.link || "",
       src: bestUrl,
@@ -739,9 +749,9 @@ export const MainContent = () => {
           const bestUrl = url160 || url96 || s.downloadUrl?.[0]?.link || "";
           return {
             id: 8000 + i,
-            title: s.name?.replace(/"/g, '"').replace(/&/g, "&") || "Unknown",
-            artist: s.primaryArtists || "Unknown",
-            album: typeof s.album === "string" ? s.album : s.album?.name || "",
+            title: sanitizeText(s.name || "Unknown"),
+            artist: sanitizeText(s.primaryArtists || "Unknown"),
+            album: typeof s.album === "string" ? sanitizeText(s.album) : sanitizeText(s.album?.name || ""),
             cover: s.image?.find((img: { quality: string }) => img.quality === "500x500")?.link || s.image?.[s.image.length - 1]?.link || "",
             src: bestUrl,
             duration: parseInt(String(s.duration)) || 0,

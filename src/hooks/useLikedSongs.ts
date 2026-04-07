@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Track } from '../data/playlist';
+import { toast } from './use-toast';
 
 const LIKED_SONGS_KEY_PREFIX = 'sonic_liked_songs_';
 const LIKED_SONGS_KEY_GUEST = 'sonic_liked_songs_guest';
@@ -45,14 +46,22 @@ export const useLikedSongs = () => {
           
           // Delete any existing for user and insert guest songs
           const { error: deleteError } = await supabase.from('liked_songs').delete().eq('user_id', userId);
-          console.log('[useLikedSongs] Delete result:', deleteError);
+          const sanitizedDeleteError = deleteError ? {
+            message: deleteError?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+            code: deleteError?.code?.replace(/[\r\n]/g, ' ') || 'Unknown'
+          } : null;
+          console.log('[useLikedSongs] Delete result:', sanitizedDeleteError);
           
           if (toSync.length > 0) {
             const { data, error } = await supabase.from('liked_songs').insert(toSync);
             console.log('[useLikedSongs] Insert result:', { data, error });
             
             if (error) {
-              console.error('[useLikedSongs] Migration error:', error);
+              const sanitizedError = {
+                message: error?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+                code: error?.code?.replace(/[\r\n]/g, ' ') || 'Unknown'
+              };
+              console.error('[useLikedSongs] Migration error:', sanitizedError);
             } else {
               console.log('[useLikedSongs] Migration successful');
               // Clear guest data after successful migration
@@ -62,7 +71,11 @@ export const useLikedSongs = () => {
         }
       }
     } catch (e) {
-      console.error('[useLikedSongs] Migration failed:', e);
+      const sanitizedError = {
+        message: (e as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+        name: (e as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+      };
+      console.error('[useLikedSongs] Migration failed:', sanitizedError);
     }
   };
 
@@ -89,7 +102,8 @@ export const useLikedSongs = () => {
     try {
       setLoading(true);
       if (user) {
-        console.log('[useLikedSongs] Loading from Supabase for user:', user.id);
+        const sanitizedUserId = user.id.replace(/[\r\n]/g, ' ');
+        console.log('[useLikedSongs] Loading from Supabase for user:', sanitizedUserId);
         // Load from Supabase for logged-in users (user-specific via RLS)
         const { data, error } = await supabase
           .from('liked_songs')
@@ -104,14 +118,19 @@ export const useLikedSongs = () => {
           console.log('[useLikedSongs] Found', data.length, 'liked songs in Supabase (using local for full data)');
           // Continue to load from local storage which has full track data
         } else if (error) {
-          console.error('[useLikedSongs] Supabase error:', error);
+          const sanitizedError = {
+            message: error?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+            code: error?.code?.replace(/[\r\n]/g, ' ') || 'Unknown'
+          };
+          console.error('[useLikedSongs] Supabase error:', sanitizedError);
         }
         // Always load from local storage for full track data
       }
       
       // Load from local storage (guest or as fallback)
       const key = getStorageKey();
-      console.log('[useLikedSongs] Loading from AsyncStorage, key:', key);
+      const sanitizedKey = key.replace(/[\r\n]/g, ' ');
+      console.log('[useLikedSongs] Loading from AsyncStorage, key:', sanitizedKey);
       const stored = await AsyncStorage.getItem(key);
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -122,7 +141,11 @@ export const useLikedSongs = () => {
         setLikedSongs([]);
       }
     } catch (e) {
-      console.error('[useLikedSongs] Failed to load liked songs:', e);
+      const sanitizedError = {
+        message: (e as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+        name: (e as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+      };
+      console.error('[useLikedSongs] Failed to load liked songs:', sanitizedError);
     } finally {
       setLoading(false);
     }
@@ -151,7 +174,11 @@ export const useLikedSongs = () => {
         
         // Delete old liked songs for this user and insert new ones
         const { error: deleteError } = await supabase.from('liked_songs').delete().eq('user_id', user.id);
-        console.log('[useLikedSongs] Delete result:', deleteError);
+        const sanitizedDeleteError = deleteError ? {
+          message: deleteError?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+          code: deleteError?.code?.replace(/[\r\n]/g, ' ') || 'Unknown'
+        } : null;
+        console.log('[useLikedSongs] Delete result:', sanitizedDeleteError);
         
         if (toSync.length > 0) {
           const { data, error } = await supabase.from('liked_songs').insert(toSync);
@@ -159,7 +186,11 @@ export const useLikedSongs = () => {
         }
       }
     } catch (e) {
-      console.error('Failed to save liked songs:', e);
+      const sanitizedError = {
+        message: (e as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+        name: (e as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+      };
+      console.error('Failed to save liked songs:', sanitizedError);
     }
   };
 
@@ -170,7 +201,8 @@ export const useLikedSongs = () => {
 
   const toggleLike = async (track: Track) => {
     if (!track || !track.id) {
-      console.warn('toggleLike called with invalid track:', track);
+      const sanitizedTrack = track ? JSON.stringify(track).replace(/[\r\n]/g, ' ').slice(0, 100) : 'null';
+      console.warn('toggleLike called with invalid track:', sanitizedTrack);
       return;
     }
     
@@ -180,10 +212,18 @@ export const useLikedSongs = () => {
       // Unlike
       const newLikedSongs = likedSongs.filter(s => s.track && s.track.id && String(s.track.id) !== trackId);
       await saveLikedSongs(newLikedSongs);
+      toast({
+        title: 'Removed from Liked Songs',
+        description: track.title || 'Track',
+      });
     } else {
       // Like
       const newLikedSongs = [{ track, likedAt: Date.now() }, ...likedSongs];
       await saveLikedSongs(newLikedSongs);
+      toast({
+        title: 'Added to Liked Songs',
+        description: track.title || 'Track',
+      });
     }
   };
 
@@ -197,8 +237,16 @@ export const useLikedSongs = () => {
         await AsyncStorage.removeItem(key);
       }
       setLikedSongs([]);
+      toast({
+        title: 'Liked Songs Cleared',
+        description: 'All liked songs have been removed',
+      });
     } catch (e) {
-      console.error('Failed to clear liked songs:', e);
+      const sanitizedError = {
+        message: (e as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+        name: (e as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+      };
+      console.error('Failed to clear liked songs:', sanitizedError);
     }
   };
 

@@ -96,6 +96,18 @@ export const HomeScreen: React.FC = () => {
   // Fetch all data with offline caching - OPTIMIZED with parallel fetching (YouTube removed)
   const fetchAllData = useCallback(async () => {
     try {
+      // Random queries for dynamic content
+      const trendingQueries = ["latest bollywood hits", "top hindi songs", "trending indian music", "popular bollywood 2025"];
+      const newReleaseQueries = ["new hindi songs 2025", "latest releases", "new bollywood music", "fresh hindi tracks"];
+      const bengaliQueries = ["bengali top hits", "bangla gaan", "bengali romantic songs", "rabindra sangeet"];
+      const forYouQueries = ["bollywood romantic hits", "hindi love songs", "sad hindi songs", "party bollywood hits", "90s bollywood"];
+
+      const randomTrending = trendingQueries[Math.floor(Math.random() * trendingQueries.length)];
+      const randomNewRelease = newReleaseQueries[Math.floor(Math.random() * newReleaseQueries.length)];
+      const randomBengali = bengaliQueries[Math.floor(Math.random() * bengaliQueries.length)];
+      const randomForYou = forYouQueries[Math.floor(Math.random() * forYouQueries.length)];
+      const randomOffset = Math.floor(Math.random() * 50);
+
       // Fetch all data in parallel for better performance
       const [
         trendingData,
@@ -103,10 +115,10 @@ export const HomeScreen: React.FC = () => {
         bengaliHitsData,
         forYouData,
       ] = await Promise.all([
-        fetchJioSaavn("latest bollywood hits", 0).finally(() => setLoadingTrending(false)),
-        fetchJioSaavn("new hindi songs 2025", 0).finally(() => setLoadingNewReleases(false)),
-        fetchJioSaavn("bengali top hits", 0, 15, "bengali").finally(() => setLoadingBengali(false)),
-        fetchJioSaavn("bollywood romantic hits", 0).finally(() => setLoadingForYou(false)),
+        fetchJioSaavn(randomTrending, randomOffset).finally(() => setLoadingTrending(false)),
+        fetchJioSaavn(randomNewRelease, randomOffset).finally(() => setLoadingNewReleases(false)),
+        fetchJioSaavn(randomBengali, randomOffset, 15, "bengali").finally(() => setLoadingBengali(false)),
+        fetchJioSaavn(randomForYou, randomOffset).finally(() => setLoadingForYou(false)),
       ]);
 
       // Update all states at once

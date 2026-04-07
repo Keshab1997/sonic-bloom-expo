@@ -22,7 +22,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("ErrorBoundary caught:", error, errorInfo);
+    const sanitizedError = {
+      message: error.message?.replace(/[\r\n]/g, ' '),
+      stack: error.stack?.replace(/[\r\n]/g, ' ')
+    };
+    console.error("ErrorBoundary caught:", sanitizedError, errorInfo);
   }
 
   handleReset = () => {

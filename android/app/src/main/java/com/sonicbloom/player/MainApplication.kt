@@ -40,6 +40,13 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    
+    // Verify application integrity
+    if (!verifyAppIntegrity()) {
+      android.os.Process.killProcess(android.os.Process.myPid())
+      return
+    }
+    
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {
@@ -47,6 +54,11 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+  }
+  
+  private fun verifyAppIntegrity(): Boolean {
+    // Basic integrity check - verify package name
+    return packageName == "com.sonicbloom.player"
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

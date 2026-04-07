@@ -25,10 +25,10 @@ export const DownloadsPage: React.FC = () => {
     }
   }, [downloads, getTotalDownloadSize, formatBytes]);
 
-  const handleDelete = (trackId: string) => {
+  const handleDelete = (trackId: string, trackTitle: string) => {
     Alert.alert(
       'Delete Download',
-      'Are you sure you want to delete this downloaded song?',
+      `Delete "${trackTitle}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => { deleteTrack(trackId); mediumHaptic(); } },
@@ -74,7 +74,7 @@ export const DownloadsPage: React.FC = () => {
         </View>
         <TouchableOpacity
           style={styles.deleteBtn}
-          onPress={() => handleDelete(String(item.track.songId || item.track.id))}
+          onPress={() => handleDelete(String(item.track.songId || item.track.id), item.track.title)}
           activeOpacity={0.7}
         >
           <Ionicons name="trash-outline" size={20} color="#ef4444" />
@@ -146,14 +146,16 @@ export const DownloadsPage: React.FC = () => {
       </View>
 
       {/* Play All Button */}
-      <TouchableOpacity
-        style={styles.playAllBtn}
-        onPress={() => { handlePlay(0); mediumHaptic(); }}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="play" size={20} color="#fff" />
-        <Text style={styles.playAllText}>Play All</Text>
-      </TouchableOpacity>
+      {filteredDownloads.length > 0 && (
+        <TouchableOpacity
+          style={styles.playAllBtn}
+          onPress={() => { handlePlay(0); mediumHaptic(); }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="play" size={20} color="#fff" />
+          <Text style={styles.playAllText}>Play All ({filteredDownloads.length})</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Downloads List */}
       <FlatList

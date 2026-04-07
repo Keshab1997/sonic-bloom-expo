@@ -45,8 +45,15 @@ export const AlbumDetailScreen: React.FC = () => {
   const fetchAlbumSongs = async () => {
     setLoading(true);
     try {
+      // Validate albumId to prevent SSRF
+      if (!albumId || typeof albumId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(albumId)) {
+        console.error('Invalid album ID');
+        setLoading(false);
+        return;
+      }
+      
       // Try albums endpoint first
-      const res = await fetch(`${API_BASE}/albums?id=${albumId}`);
+      const res = await fetch(`${API_BASE}/albums?id=${encodeURIComponent(albumId)}`);
       if (res.ok) {
         const data = await res.json();
         const results = data.data?.songs || [];
@@ -87,6 +94,13 @@ export const AlbumDetailScreen: React.FC = () => {
 
     // Fallback: search for album name
     try {
+      // Validate albumName to prevent SSRF
+      if (!albumName || typeof albumName !== 'string' || albumName.length > 200) {
+        console.error('Invalid album name');
+        setLoading(false);
+        return;
+      }
+      
       const res = await fetch(`${API_BASE}/search/songs?query=${encodeURIComponent(albumName)}&page=1&limit=50`);
       if (res.ok) {
         const data = await res.json();

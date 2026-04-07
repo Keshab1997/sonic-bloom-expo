@@ -49,6 +49,7 @@ interface PlayerContextType {
   quality: AudioQuality;
   setQuality: (q: AudioQuality) => void;
   sleepMinutes: number | null;
+  sleepRemainingSeconds: number | null;
   setSleepTimer: (minutes: number) => void;
   cancelSleepTimer: () => void;
   isCurrentTrackLiked: boolean;
@@ -89,7 +90,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [queue, setQueue] = useState<Track[]>([]);
   const [quality, setQualityState] = useState<AudioQuality>(DEFAULT_AUDIO_QUALITY);
   const [sleepMinutes, setSleepMinutesState] = useState<number | null>(null);
+  const [sleepRemainingSeconds, setSleepRemainingSeconds] = useState<number | null>(null);
   const sleepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sleepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sleepMinutesRef = useRef(sleepMinutes);
+
+  useEffect(() => { sleepMinutesRef.current = sleepMinutes; }, [sleepMinutes]);
   const [eqBass, setEqBassState] = useState(0);
   const [eqMid, setEqMidState] = useState(0);
   const [eqTreble, setEqTrebleState] = useState(0);
@@ -147,13 +153,23 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         await supabase.from("listening_history").insert({ track_id: trackId, user_id: user.id, duration_played: durationPlayed, completed });
       }
     } catch (err) {
-      console.error('addToHistory error:', err);
+      const sanitizedError = {
+        message: (err as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+        name: (err as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+      };
+      console.error('addToHistory error:', sanitizedError);
     }
     return true;
   }, []);
 
   useEffect(() => {
-    audioService.initialize().catch(e => console.error('Failed to initialize audio:', e));
+    audioService.initialize().catch(e => {
+      const sanitizedError = {
+        message: (e as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
+        name: (e as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
+      };
+      console.error('Failed to initialize audio:', sanitizedError);
+    });
     return () => { audioService.unload().catch(() => {}); };
   }, []);
 
@@ -185,28 +201,65 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [queue]);
 
   // গান শেষ হলে অটো-নেক্সট
-  useTrackPlayerEvents([Event.PlaybackQueueEnded], () => {
+  useTrackPlayerEvents([Event.PlaybackQueueEnded], async (event) => {
+    // Sleep timer active থাকলে এবং "End of track" mode হলে pause করো
+    if (sleepMinutesRef.current === -1) {
+      TrackPlayer.pause().catch(() => {});
+      setSleepMinutesState(null);
+      setSleepRemainingSeconds(null);
+      if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
+      if (sleepIntervalRef.current) clearInterval(sleepIntervalRef.current);
+      return;
+    }
+
     if (repeatRef.current === "one") {
       const track = trackListRef.current[currentIndexRef.current];
       if (track) audioService.playTrack(track, qualityRef.current).catch(() => {});
       return;
     }
 
-    const q = queueRef.current;
-    if (q.length > 0) {
-      const nt = q[0];
-      setQueue(prev => prev.slice(1));
-      const ei = trackListRef.current.findIndex(t => t.id === nt.id);
-      if (ei !== -1) { setCurrentIndex(ei); audioService.playTrack(trackListRef.current[ei], qualityRef.current).catch(() => {}); }
-      else { setTrackList(prev => [nt, ...prev]); setCurrentIndex(0); audioService.playTrack(nt, qualityRef.current).catch(() => {}); }
-      return;
+    // Use TrackPlayer's skipToNext for lock screen compatibility
+    try {
+      const queue = await TrackPlayer.getQueue();
+      const currentTrackIndex = await TrackPlayer.getCurrentTrack();
+      
+      if (typeof currentTrackIndex === 'number' && currentTrackIndex < queue.length - 1) {
+        // More tracks in queue
+        await TrackPlayer.skipToNext();
+        const newTrackIndex = await TrackPlayer.getCurrentTrack();
+        if (typeof newTrackIndex === 'number') {
+          setCurrentIndex(newTrackIndex);
+        }
+      } else {
+        // Queue ended, check for more tracks in our state
+        const q = queueRef.current;
+        if (q.length > 0) {
+          const nt = q[0];
+          setQueue(prev => prev.slice(1));
+          const ei = trackListRef.current.findIndex(t => t.id === nt.id);
+          if (ei !== -1) {
+            setCurrentIndex(ei);
+            audioService.playQueue(trackListRef.current, ei, qualityRef.current).catch(() => {});
+          }
+          else {
+            setTrackList(prev => [nt, ...prev]);
+            setCurrentIndex(0);
+            audioService.playTrack(nt, qualityRef.current).catch(() => {});
+          }
+        } else {
+          const nextIdx = shuffleRef.current
+            ? Math.floor(Math.random() * trackListRef.current.length)
+            : (currentIndexRef.current + 1) % trackListRef.current.length;
+          const nt = trackListRef.current[nextIdx];
+          if (nt) {
+            setCurrentIndex(nextIdx);
+            audioService.playQueue(trackListRef.current, nextIdx, qualityRef.current).catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[PlayerContext] Queue ended event error:', e);
     }
-
-    const nextIdx = shuffleRef.current
-      ? Math.floor(Math.random() * trackListRef.current.length)
-      : (currentIndexRef.current + 1) % trackListRef.current.length;
-    const nt = trackListRef.current[nextIdx];
-    if (nt) { setCurrentIndex(nextIdx); audioService.playTrack(nt, qualityRef.current).catch(() => {}); }
   });
 
   const playTrackList = useCallback((tracks: Track[], index: number = 0) => {
@@ -214,7 +267,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!track) return;
     setTrackList(tracks);
     setCurrentIndex(index);
-    audioService.playTrack(track, qualityRef.current).catch(() => {});
+    // Use playQueue to add all tracks to TrackPlayer for lock screen controls
+    audioService.playQueue(tracks, index, qualityRef.current).catch(() => {});
   }, []);
 
   const playTrack = useCallback((track: Track) => {
@@ -258,27 +312,43 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isLoadingTrackRef.current = true;
 
     try {
-      const q = queueRef.current;
-      let track: Track | undefined;
-      let idx: number;
-
-      if (q.length > 0) {
-        track = q[0];
-        setQueue(prev => prev.slice(1));
-        const ei = trackListRef.current.findIndex(t => t.id === track!.id);
-        if (ei !== -1) { idx = ei; }
-        else { setTrackList(prev => [track!, ...prev]); idx = 0; }
+      // First try TrackPlayer's skipToNext for lock screen compatibility
+      const queue = await TrackPlayer.getQueue();
+      const currentIdx = await TrackPlayer.getCurrentTrack();
+      
+      if (typeof currentIdx === 'number' && currentIdx < queue.length - 1) {
+        // More tracks in TrackPlayer queue
+        await TrackPlayer.skipToNext();
+        const newIdx = await TrackPlayer.getCurrentTrack();
+        if (typeof newIdx === 'number') {
+          setCurrentIndex(newIdx);
+        }
       } else {
-        idx = shuffleRef.current
-          ? Math.floor(Math.random() * trackListRef.current.length)
-          : (currentIndexRef.current + 1) % trackListRef.current.length;
-        track = trackListRef.current[idx];
-      }
+        // Handle queue logic
+        const q = queueRef.current;
+        let track: Track | undefined;
+        let idx: number;
 
-      if (track) {
-        setCurrentIndex(idx!);
-        await audioService.playTrack(track, qualityRef.current);
+        if (q.length > 0) {
+          track = q[0];
+          setQueue(prev => prev.slice(1));
+          const ei = trackListRef.current.findIndex(t => t.id === track!.id);
+          if (ei !== -1) { idx = ei; }
+          else { setTrackList(prev => [track!, ...prev]); idx = 0; }
+        } else {
+          idx = shuffleRef.current
+            ? Math.floor(Math.random() * trackListRef.current.length)
+            : (currentIndexRef.current + 1) % trackListRef.current.length;
+          track = trackListRef.current[idx];
+        }
+
+        if (track) {
+          setCurrentIndex(idx!);
+          await audioService.playQueue(trackListRef.current, idx!, qualityRef.current);
+        }
       }
+    } catch (e) {
+      console.error('[PlayerContext] Next error:', e);
     } finally {
       isLoadingTrackRef.current = false;
     }
@@ -295,11 +365,26 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         await TrackPlayer.seekTo(0);
         return;
       }
-      const prevIdx = (currentIndexRef.current - 1 + trackListRef.current.length) % trackListRef.current.length;
-      const pt = trackListRef.current[prevIdx];
-      if (!pt) return;
-      setCurrentIndex(prevIdx);
-      await audioService.playTrack(pt, qualityRef.current);
+      
+      // Try TrackPlayer's skipToPrevious first
+      const queue = await TrackPlayer.getQueue();
+      const currentIdx = await TrackPlayer.getCurrentTrack();
+      
+      if (typeof currentIdx === 'number' && currentIdx > 0) {
+        await TrackPlayer.skipToPrevious();
+        const newIdx = await TrackPlayer.getCurrentTrack();
+        if (typeof newIdx === 'number') {
+          setCurrentIndex(newIdx);
+        }
+      } else {
+        const prevIdx = (currentIndexRef.current - 1 + trackListRef.current.length) % trackListRef.current.length;
+        const pt = trackListRef.current[prevIdx];
+        if (!pt) return;
+        setCurrentIndex(prevIdx);
+        await audioService.playQueue(trackListRef.current, prevIdx, qualityRef.current);
+      }
+    } catch (e) {
+      console.error('[PlayerContext] Prev error:', e);
     } finally {
       isLoadingTrackRef.current = false;
     }
@@ -372,20 +457,47 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const setSleepTimer = useCallback((minutes: number) => {
     if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
+    if (sleepIntervalRef.current) clearInterval(sleepIntervalRef.current);
+    
     setSleepMinutesState(minutes);
+    
+    // "End of track" mode - গান শেষে pause হবে
+    if (minutes === -1) {
+      setSleepRemainingSeconds(-1);
+      return;
+    }
+    
+    // Normal timer mode
+    setSleepRemainingSeconds(minutes * 60);
+    
+    sleepIntervalRef.current = setInterval(() => {
+      setSleepRemainingSeconds(prev => {
+        if (prev === null || prev <= 1) return null;
+        return prev - 1;
+      });
+    }, 1000);
+    
     sleepTimerRef.current = setTimeout(async () => {
       await TrackPlayer.pause();
       setSleepMinutesState(null);
+      setSleepRemainingSeconds(null);
+      if (sleepIntervalRef.current) clearInterval(sleepIntervalRef.current);
     }, minutes * 60 * 1000);
   }, []);
 
   const cancelSleepTimer = useCallback(() => {
     if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
+    if (sleepIntervalRef.current) clearInterval(sleepIntervalRef.current);
     sleepTimerRef.current = null;
+    sleepIntervalRef.current = null;
     setSleepMinutesState(null);
+    setSleepRemainingSeconds(null);
   }, []);
 
-  useEffect(() => () => { if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current); }, []);
+  useEffect(() => () => { 
+    if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current); 
+    if (sleepIntervalRef.current) clearInterval(sleepIntervalRef.current);
+  }, []);
 
   const currentTrack = trackList[currentIndex] || null;
 
@@ -401,7 +513,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setEqBass, setEqMid, setEqTreble, applyEqPreset,
     playbackSpeed, setPlaybackSpeed, crossfade, setCrossfade,
     queue, addToQueue, playNext, removeFromQueue, clearQueue, moveQueueItem, shuffleQueue,
-    quality, setQuality, sleepMinutes, setSleepTimer, cancelSleepTimer,
+    quality, setQuality, sleepMinutes, sleepRemainingSeconds, setSleepTimer, cancelSleepTimer,
     play, playTrack, playTrackList, pause, togglePlay, next, prev, seek, seekForward, seekBackward, setVolume,
     toggleShuffle, toggleRepeat, startSeeking, stopSeeking,
     isCurrentTrackLiked: currentTrack?.id ? isLikedHook(String(currentTrack.id)) : false,
@@ -412,7 +524,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     trackList, currentTrack, currentIndex, isPlaying,
     position, duration, buffered,
     volume, shuffle, repeat, eqBass, eqMid, eqTreble, playbackSpeed, crossfade,
-    queue, quality, sleepMinutes,
+    queue, quality, sleepMinutes, sleepRemainingSeconds,
     play, playTrack, playTrackList, pause, togglePlay, next, prev, seek, seekForward, seekBackward, setVolume,
     toggleShuffle, toggleRepeat, startSeeking, stopSeeking, addToQueue, playNext, removeFromQueue, clearQueue,
     moveQueueItem, shuffleQueue, setEqBass, setEqMid, setEqTreble, applyEqPreset,

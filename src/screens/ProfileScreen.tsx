@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet, Alert, Image, TextInput,
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -174,6 +175,34 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
+  const handleClearCache = () => {
+    Alert.alert(
+      'Clear Cache',
+      'This will clear all cached data including search results and offline content. Downloads will not be affected.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const keys = await AsyncStorage.getAllKeys();
+              const cacheKeys = keys.filter(key => 
+                key.includes('search_cache_') || 
+                key.includes('offline_cache_') ||
+                key.includes('sonic_cache_')
+              );
+              await AsyncStorage.multiRemove(cacheKeys);
+              Alert.alert('Success', `Cleared ${cacheKeys.length} cache items`);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear cache');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSignOut = () => {
     Alert.alert(
       'Sign Out',
@@ -303,6 +332,16 @@ export const ProfileScreen: React.FC = () => {
               <Text style={styles.settingValue}>{downloads.length}</Text>
               <Ionicons name="chevron-forward" size={18} color="#555" />
             </View>
+          </Pressable>
+
+          <Pressable style={styles.settingItem} onPress={handleClearCache}>
+            <View style={styles.settingLeft}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="trash-outline" size={20} color="#1DB954" />
+              </View>
+              <Text style={styles.settingText}>Clear Cache</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#555" />
           </Pressable>
 
           <Pressable style={styles.settingItem} onPress={() => Alert.alert('Notifications', 'Notification settings coming soon')}>
