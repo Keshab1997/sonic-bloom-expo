@@ -12,3 +12,9 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+
+# react-native-track-player rules
+-keep class com.doublesymmetry.trackplayer.** { *; }
+-keep class com.google.android.exoplayer2.** { *; }
+-keep class com.google.android.gms.cast.** { *; }
+-keep interface com.doublesymmetry.trackplayer.** { *; }
