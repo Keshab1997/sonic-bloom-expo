@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK (Test & Release)
 
 on:
   push:
@@ -6,8 +6,31 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install vitest
+        run: npm install -D vitest
+
+      - name: Run tests
+        run: npx vitest run
+
   build:
     runs-on: ubuntu-latest
+    needs: test
 
     steps:
       - name: Checkout
@@ -34,15 +57,10 @@ jobs:
       - name: Apply patches
         run: npx patch-package
 
-      - name: Bundle JS for Android
-        run: npx expo export --platform android
+      - name: Prebuild Android
+        run: npx expo prebuild --platform android --clean
 
-      - name: Copy JS bundle to Android assets
-        run: |
-          mkdir -p android/app/src/main/assets
-          cp -r dist/* android/app/src/main/assets/
-
-      - name: Build APK with bundled JS
+      - name: Build Debug APK with bundled JS
         run: cd android && ./gradlew :app:assembleDebug --no-daemon
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
@@ -51,6 +69,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: sonic-bloom-debug
+          name: sonic-bloom-final-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
