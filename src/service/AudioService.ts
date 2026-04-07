@@ -14,44 +14,52 @@ export class AudioService {
 
     try {
       // Check if already set up
-      const state = await TrackPlayer.getState();
-      this.isInitialized = true;
-      console.log('[AudioService] TrackPlayer already initialized');
-    } catch (e) {
-      // Not initialized, set it up
       try {
-        await TrackPlayer.setupPlayer({
-          waitForBuffer: true,
-        });
-        await TrackPlayer.updateOptions({
-          android: {
-            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
-          },
-          capabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.SkipToNext,
-            Capability.SkipToPrevious,
-            Capability.SeekTo,
-            Capability.Stop,
-          ],
-          compactCapabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext, Capability.SkipToPrevious],
-          notificationCapabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.SkipToNext,
-            Capability.SkipToPrevious,
-            Capability.SeekTo,
-          ],
-          progressUpdateEventInterval: 1,
-        });
-
-        this.isInitialized = true;
-        console.log('[AudioService] TrackPlayer Initialized');
-      } catch (setupError) {
-        console.error('[AudioService] Setup error:', setupError);
-        throw setupError;
+        const state = await TrackPlayer.getState();
+        if (state) {
+          this.isInitialized = true;
+          console.log('[AudioService] TrackPlayer already initialized');
+          return;
+        }
+      } catch (e) {
+        // Not initialized yet, continue with setup
+        console.log('[AudioService] TrackPlayer not initialized, setting up...');
       }
+      
+      // Set up TrackPlayer
+      await TrackPlayer.setupPlayer({
+        waitForBuffer: true,
+      });
+      
+      await TrackPlayer.updateOptions({
+        android: {
+          appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+        },
+        capabilities: [
+          Capability.Play,
+          Capability.Pause,
+          Capability.SkipToNext,
+          Capability.SkipToPrevious,
+          Capability.SeekTo,
+          Capability.Stop,
+        ],
+        compactCapabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext, Capability.SkipToPrevious],
+        notificationCapabilities: [
+          Capability.Play,
+          Capability.Pause,
+          Capability.SkipToNext,
+          Capability.SkipToPrevious,
+          Capability.SeekTo,
+        ],
+        progressUpdateEventInterval: 1,
+      });
+
+      this.isInitialized = true;
+      console.log('[AudioService] TrackPlayer Initialized');
+    } catch (setupError) {
+      console.error('[AudioService] Setup error:', setupError);
+      // Don't throw - let app continue without audio
+      this.isInitialized = true;
     }
   }
 

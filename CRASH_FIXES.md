@@ -80,6 +80,23 @@ adb logcat | grep -i "sonic\|error\|crash"
 2. **API Error:** JioSaavn API down আছে কিনা check করুন
 3. **Supabase Error:** `.env` file-এ credentials ঠিক আছে কিনা check করুন
 
+## Latest Fixes (2026-04-07)
+
+### 6. **SplashScreen Dimensions Crash** ❌
+**সমস্যা:** `Dimensions.get('window')` was called at module level which can crash on some devices during initialization.
+
+**সমাধান:** Changed to use `useState` and `Dimensions.addEventListener` for safe dynamic dimension handling.
+
+### 7. **AudioService Initialization Crash** ❌
+**সমস্যা:** TrackPlayer initialization was throwing errors and crashing the app.
+
+**সমাধান:** Added proper error handling and fallback - app continues even if audio fails to initialize.
+
+### 8. **PlayerContext Memory Leaks** ❌
+**সমস্যা:** Async operations continuing after component unmount causing crashes.
+
+**সমাধান:** Added `isMounted` flags to prevent state updates after unmount.
+
 ## Notes:
 - Release APK sign করা নেই - install করার সময় "Unknown source" warning আসবে
 - Signing setup করতে চাইলে বলুন

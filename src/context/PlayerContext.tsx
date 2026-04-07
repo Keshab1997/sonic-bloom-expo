@@ -163,30 +163,43 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    
     audioService.initialize().catch(e => {
+      if (!isMounted) return;
       const sanitizedError = {
         message: (e as Error)?.message?.replace(/[\r\n]/g, ' ') || 'Unknown error',
         name: (e as Error)?.name?.replace(/[\r\n]/g, ' ') || 'Error'
       };
       console.error('Failed to initialize audio:', sanitizedError);
     });
-    return () => { audioService.unload().catch(() => {}); };
+    return () => {
+      isMounted = false;
+      audioService.unload().catch(() => {});
+    };
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    
     VolumeManager.getVolume().then((result) => {
+      if (!isMounted) return;
       const v = typeof result === 'number' ? result : (result as any).volume ?? DEFAULT_VOLUME;
       setVolumeState(v);
       TrackPlayer.setVolume(v).catch(() => {});
     }).catch(() => {});
 
     const sub = VolumeManager.addVolumeListener((result) => {
+      if (!isMounted) return;
       const v = typeof result.volume === 'number' ? result.volume : DEFAULT_VOLUME;
       setVolumeState(v);
       TrackPlayer.setVolume(v).catch(() => {});
     });
 
-    return () => sub.remove();
+    return () => {
+      isMounted = false;
+      sub?.remove();
+    };
   }, []);
 
   useEffect(() => {

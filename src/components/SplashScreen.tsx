@@ -1,8 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Animated, Easing, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-const { width } = Dimensions.get('window');
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -10,15 +8,24 @@ interface SplashScreenProps {
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, duration = 3000 }) => {
+  const [dimensions, setDimensions] = useState(Dimensions.get('window'));
+  
   const scaleAnim = useRef(new Animated.Value(0.3)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const note1Anim = useRef(new Animated.Value(0)).current;
   const note2Anim = useRef(new Animated.Value(0)).current;
 
-  const iconSize = width * 0.45; 
+  const iconSize = dimensions.width * 0.45;
   const petalWidth = iconSize * 0.12;
   const petalHeight = iconSize * 0.35;
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setDimensions(window);
+    });
+    return () => subscription?.remove();
+  }, []);
 
   useEffect(() => {
     // Entrance Animation
