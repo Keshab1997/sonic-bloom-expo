@@ -1,8 +1,6 @@
-import { useState } from 'react';
-import TrackPlayer from 'react-native-track-player';
-import { PlaybackService } from './src/service/PlaybackService';
+import { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, SafeAreaView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, SafeAreaView, ActivityIndicator, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -118,13 +116,41 @@ const RootNavigator = () => {
   );
 };
 
-// App Root
+// App Root with Error Boundary
 export default function App() {
   const [splashFinished, setSplashFinished] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const errorHandler = (error: Error) => {
+      console.error('[App] Error:', error);
+      setError(error);
+    };
+
+    // Global error handler
+    const originalHandler = ErrorUtils.getGlobalHandler();
+    ErrorUtils.setGlobalHandler((error, isFatal) => {
+      errorHandler(error);
+      originalHandler(error, isFatal);
+    });
+
+    return () => {
+      ErrorUtils.setGlobalHandler(originalHandler);
+    };
+  }, []);
 
   const handleSplashFinish = () => {
     setSplashFinished(true);
   };
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Something went wrong</Text>
+        <Text style={styles.errorText}>{error.message}</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -147,10 +173,11 @@ export default function App() {
   );
 }
 
-TrackPlayer.registerPlaybackService(() => PlaybackService);
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a' },
   safeArea: { flex: 1, backgroundColor: '#0a0a0a' },
   loadingContainer: { flex: 1, backgroundColor: '#0a0a0a', justifyContent: 'center', alignItems: 'center' },
+  errorContainer: { flex: 1, backgroundColor: '#0a0a0a', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  errorTitle: { color: '#ff4444', fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
+  errorText: { color: '#ffffff', fontSize: 14, textAlign: 'center' },
 });

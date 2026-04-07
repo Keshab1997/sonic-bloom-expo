@@ -13,36 +13,45 @@ export class AudioService {
     if (this.isInitialized) return;
 
     try {
-      await TrackPlayer.setupPlayer();
-      await TrackPlayer.updateOptions({
-        android: {
-          appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
-        },
-        capabilities: [
-          Capability.Play,
-          Capability.Pause,
-          Capability.SkipToNext,
-          Capability.SkipToPrevious,
-          Capability.SeekTo,
-          Capability.Stop,
-        ],
-        compactCapabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext, Capability.SkipToPrevious],
-        // Enable notification on lock screen with seek capability
-        notificationCapabilities: [
-          Capability.Play,
-          Capability.Pause,
-          Capability.SkipToNext,
-          Capability.SkipToPrevious,
-          Capability.SeekTo,
-        ],
-        // Enable progress bar on lock screen
-        progressUpdateEventInterval: 1,
-      });
-
+      // Check if already set up
+      const state = await TrackPlayer.getState();
       this.isInitialized = true;
-      console.log('[AudioService] TrackPlayer Initialized');
+      console.log('[AudioService] TrackPlayer already initialized');
     } catch (e) {
-      console.log('[AudioService] Setup error:', e);
+      // Not initialized, set it up
+      try {
+        await TrackPlayer.setupPlayer({
+          waitForBuffer: true,
+        });
+        await TrackPlayer.updateOptions({
+          android: {
+            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+          },
+          capabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+            Capability.SeekTo,
+            Capability.Stop,
+          ],
+          compactCapabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext, Capability.SkipToPrevious],
+          notificationCapabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+            Capability.SeekTo,
+          ],
+          progressUpdateEventInterval: 1,
+        });
+
+        this.isInitialized = true;
+        console.log('[AudioService] TrackPlayer Initialized');
+      } catch (setupError) {
+        console.error('[AudioService] Setup error:', setupError);
+        throw setupError;
+      }
     }
   }
 
