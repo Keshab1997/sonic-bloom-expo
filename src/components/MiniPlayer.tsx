@@ -21,7 +21,7 @@ const MiniButton = memo(({ icon, color, onPress }: { icon: string; color: string
 ));
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onExpand, onClose }) => {
-  const { currentTrack, isPlaying, togglePlay, next, prev, progress, duration, queue, tracks, currentIndex, shuffle, toggleShuffle, repeat, toggleRepeat } = usePlayer();
+  const { currentTrack, isPlaying, togglePlay, next, prev, progress, duration, queue, tracks, currentIndex, shuffle, toggleShuffle, repeat, toggleRepeat, seekForward, seekBackward } = usePlayer();
   const { isLiked, toggleLike } = useLikedSongsContext();
   const { downloadTrack, isDownloaded, isDownloading, getDownloadProgress } = useDownloadsContext();
   const [fsVisible, setFsVisible] = useState(false);
@@ -44,6 +44,8 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onExpand, onClose }) => 
   const handlePrev = useCallback(() => { prev(); lightHaptic(); }, [prev]);
   const handleTogglePlay = useCallback(() => { togglePlay(); lightHaptic(); }, [togglePlay]);
   const handleNext = useCallback(() => { next(); lightHaptic(); }, [next]);
+  const handleSeekBack = useCallback(() => { seekBackward(10); lightHaptic(); }, [seekBackward]);
+  const handleSeekFwd = useCallback(() => { seekForward(30); lightHaptic(); }, [seekForward]);
 
   if (!currentTrack) return null;
 
@@ -62,6 +64,9 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onExpand, onClose }) => 
         <CachedImage source={{ uri: currentTrack.cover }} style={styles.miniCover} defaultSource={require('../../assets/icon.png')} />
         <View style={styles.miniInfo}>
           <Text style={styles.miniTitle} numberOfLines={1}>{currentTrack.title}</Text>
+          {currentTrack.album && (
+            <Text style={styles.miniAlbum} numberOfLines={1}>{currentTrack.album}</Text>
+          )}
           <Text style={styles.miniArtist} numberOfLines={1}>{currentTrack.artist}</Text>
         </View>
         <TouchableOpacity style={styles.miniBtn} onPress={handleDownload} activeOpacity={0.7}>
@@ -71,9 +76,15 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onExpand, onClose }) => 
           <Ionicons name={liked ? "heart" : "heart-outline"} size={22} color={liked ? "#1DB954" : "#fff"} />
         </TouchableOpacity>
         <MiniButton icon="swap-vertical" color={shuffle ? "#1DB954" : "#666"} onPress={() => { toggleShuffle(); lightHaptic(); }} />
+        <TouchableOpacity style={styles.miniBtn} onPress={handleSeekBack} activeOpacity={0.7}>
+          <Ionicons name="play-back" size={18} color="#fff" />
+        </TouchableOpacity>
         <MiniButton icon="play-skip-back" color="#fff" onPress={handlePrev} />
         <MiniButton icon={isPlaying ? "pause" : "play"} color="#1DB954" onPress={handleTogglePlay} />
         <MiniButton icon="play-skip-forward" color="#fff" onPress={handleNext} />
+        <TouchableOpacity style={styles.miniBtn} onPress={handleSeekFwd} activeOpacity={0.7}>
+          <Ionicons name="play-forward" size={18} color="#fff" />
+        </TouchableOpacity>
         <MiniButton icon="repeat" color={repeat !== "off" ? "#1DB954" : "#666"} onPress={() => { toggleRepeat(); lightHaptic(); }} />
         <TouchableOpacity style={styles.miniBtn} onPress={() => setPlaylistVisible(true)} activeOpacity={0.7}>
           <View>
@@ -99,6 +110,7 @@ const styles = StyleSheet.create({
   miniCover: { width: 44, height: 44, borderRadius: 6, backgroundColor: '#2a2a2a' },
   miniInfo: { flex: 1, marginLeft: 10 },
   miniTitle: { fontSize: 13, fontWeight: 'bold', color: '#fff' },
+  miniAlbum: { fontSize: 10, color: '#1DB954', fontWeight: '500' },
   miniArtist: { fontSize: 11, color: '#888' },
   miniBtn: { padding: 8 },
   queueBadgeMini: { position: 'absolute', top: -2, right: -4, backgroundColor: '#1DB954', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },

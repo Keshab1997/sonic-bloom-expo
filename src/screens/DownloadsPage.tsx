@@ -17,16 +17,13 @@ export const DownloadsPage: React.FC = () => {
 
   // Calculate total download size
   useEffect(() => {
-    const calculateSize = async () => {
-      const size = await getTotalDownloadSize();
-      setTotalSize(formatBytes(size));
-    };
     if (downloads.length > 0) {
-      calculateSize();
+      const size = getTotalDownloadSize();
+      setTotalSize(formatBytes(size));
     } else {
       setTotalSize('0 Bytes');
     }
-  }, [downloads.length, getTotalDownloadSize, formatBytes]);
+  }, [downloads, getTotalDownloadSize, formatBytes]);
 
   const handleDelete = (trackId: string) => {
     Alert.alert(

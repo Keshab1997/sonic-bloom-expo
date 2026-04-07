@@ -185,6 +185,9 @@ export const QueueScreen: React.FC = () => {
                       <Text style={[styles.queueTitle, isCurrent && styles.queueTitleActive]} numberOfLines={1}>
                         {track.title}
                       </Text>
+                      {track.album && (
+                        <Text style={styles.queueAlbum} numberOfLines={1}>{track.album}</Text>
+                      )}
                       <Text style={styles.queueArtist} numberOfLines={1}>
                         {track.artist}
                       </Text>
@@ -245,6 +248,9 @@ export const QueueScreen: React.FC = () => {
                       <Text style={styles.queueTitle} numberOfLines={1}>
                         {track.title}
                       </Text>
+                      {track.album && (
+                        <Text style={styles.queueAlbum} numberOfLines={1}>{track.album}</Text>
+                      )}
                       <Text style={styles.queueArtist} numberOfLines={1}>
                         {track.artist}
                       </Text>
@@ -324,6 +330,9 @@ export const QueueScreen: React.FC = () => {
                       <Text style={styles.queueTitle} numberOfLines={1}>
                         {track.title}
                       </Text>
+                      {track.album && (
+                        <Text style={styles.queueAlbum} numberOfLines={1}>{track.album}</Text>
+                      )}
                       <Text style={styles.queueArtist} numberOfLines={1}>
                         {track.artist}
                       </Text>
@@ -456,6 +465,7 @@ const styles = StyleSheet.create({
   queueImage: { width: 48, height: 48, borderRadius: 6 },
   queueInfo: { flex: 1 },
   queueTitle: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  queueAlbum: { fontSize: 11, color: '#1DB954', marginTop: 1 },
   queueArtist: { fontSize: 12, color: '#888', marginTop: 2 },
   removeBtn: { padding: 8 },
   emptyContainer: {

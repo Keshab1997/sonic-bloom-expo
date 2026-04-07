@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 import { Platform } from 'react-native';
 import { Track } from '../data/playlist';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
 
 const DOWNLOADS_KEY_PREFIX = 'sonic_downloads_';
-const DOWNLOADS_TABLE_EXISTS_KEY = 'downloads_table_checked';
 const STORAGE_LOCATION_KEY = 'sonic_storage_location';
 
 export type StorageLocation = 'internal' | 'external';
@@ -16,21 +14,19 @@ export interface DownloadedTrack {
   track: Track;
   localUri: string;
   downloadedAt: number;
+  fileSize?: number;
 }
 
 export const useDownloads = () => {
-  const { user } = useAuth();
   const [downloads, setDownloads] = useState<DownloadedTrack[]>([]);
   const [downloading, setDownloading] = useState<Record<string, number>>({});
   const [storageLocation, setStorageLocation] = useState<StorageLocation>('internal');
-  const prevUserIdRef = useRef<string | null>(null);
   const validDownloadsRef = useRef<DownloadedTrack[]>([]);
   const storageLocationRef = useRef<StorageLocation>('internal');
 
-  // Get user-specific storage key
   const getStorageKey = useCallback(() => {
-    return user ? `${DOWNLOADS_KEY_PREFIX}${user.id}` : null;
-  }, [user]);
+    return 'sonic_downloads_guest';
+  }, []);
 
   // Get download directory - always private storage (no permissions needed)
   const getDownloadDirectory = useCallback(() => {
@@ -64,15 +60,8 @@ export const useDownloads = () => {
       }
     };
     loadStorageLocation();
-
-    // Clear data when user changes
-    if (prevUserIdRef.current && prevUserIdRef.current !== user?.id) {
-      setDownloads([]);
-      setDownloading({});
-    }
-    prevUserIdRef.current = user?.id || null;
     loadDownloads();
-  }, [user]);
+  }, []);
 
   const loadDownloads = async () => {
     try {
@@ -88,9 +77,6 @@ export const useDownloads = () => {
       if (localData) {
         try {
           const parsed = JSON.parse(localData);
-          
-          // Don't validate files - just load them
-          // File validation is expensive and causes issues
           setDownloads(parsed);
           validDownloadsRef.current = parsed;
         } catch (e) {
@@ -98,52 +84,6 @@ export const useDownloads = () => {
         }
       } else {
         console.log('[useDownloads] No local data found');
-      }
-      
-      // Then load from Supabase and merge with local (for logged-in users)
-      if (user) {
-        // Check if table exists first
-        const tableChecked = await AsyncStorage.getItem(DOWNLOADS_TABLE_EXISTS_KEY);
-        
-        if (!tableChecked) {
-          // Try to create table if it doesn't exist
-          try {
-            // This will fail if table doesn't exist, which is fine
-            await supabase.from('downloads').select('id').limit(1);
-            await AsyncStorage.setItem(DOWNLOADS_TABLE_EXISTS_KEY, 'true');
-          } catch (e) {
-            return; // Skip Supabase operations
-          }
-        }
-        
-        const { data, error } = await supabase
-          .from('downloads')
-          .select('*')
-          .eq('user_id', user.id);
-        
-        if (!error && data && data.length > 0) {
-          const supabaseDownloads = data.map((d: any) => ({
-            track: d.track_data,
-            localUri: d.local_uri,
-            downloadedAt: new Date(d.downloaded_at).getTime(),
-          }));
-          
-          // Get current downloads from local variable (not state)
-          const currentDownloads = validDownloadsRef.current;
-          // Merge: add supabase entries that don't exist locally
-          const existingIds = new Set(currentDownloads.map(d => String(d.track.id)));
-          const newFromSupabase = supabaseDownloads.filter((d: any) => !existingIds.has(String(d.track.id)));
-          
-          if (newFromSupabase.length > 0) {
-            setDownloads(prev => [...prev, ...newFromSupabase]);
-            // Update local cache with merged data
-            const merged = [...currentDownloads, ...newFromSupabase];
-            const key = getStorageKey();
-            if (key) {
-              await AsyncStorage.setItem(key, JSON.stringify(merged));
-            }
-          }
-        }
       }
     } catch (e) {
       console.error('Failed to load downloads:', e);
@@ -154,29 +94,12 @@ export const useDownloads = () => {
     try {
       setDownloads(newDownloads);
       
-      // Save to user-specific AsyncStorage
+      // Save to user-specific AsyncStorage only (no Supabase sync)
       const key = getStorageKey();
       if (key) {
         await AsyncStorage.setItem(key, JSON.stringify(newDownloads));
       } else {
         await AsyncStorage.setItem(`${DOWNLOADS_KEY_PREFIX}guest`, JSON.stringify(newDownloads));
-      }
-      
-      // Sync to Supabase if user is logged in (RLS ensures user-specific)
-      if (user) {
-        const toSync = newDownloads.map(d => ({
-          user_id: user.id,
-          track_id: String(d.track.id),
-          track_data: d.track,
-          local_uri: d.localUri,
-          downloaded_at: new Date(d.downloadedAt).toISOString(),
-        }));
-        
-        // Delete old downloads and insert new ones
-        await supabase.from('downloads').delete().eq('user_id', user.id);
-        if (toSync.length > 0) {
-          await supabase.from('downloads').insert(toSync);
-        }
       }
     } catch (e) {
       console.error('Failed to save downloads:', e);
@@ -244,6 +167,7 @@ export const useDownloads = () => {
       
       // Get response as ArrayBuffer (works in React Native)
       const arrayBuffer = await response.arrayBuffer();
+      const fileSize = arrayBuffer.byteLength;
       setDownloading(prev => ({ ...prev, [trackId]: 75 }));
       
       // Convert to Uint8Array and write to file
@@ -251,10 +175,35 @@ export const useDownloads = () => {
       await file.create({ overwrite: true });
       file.write(uint8Array);
       
-      console.log(`[useDownloads] Download complete: ${track.title}`);
+      console.log(`[useDownloads] Download complete: ${track.title}, size: ${fileSize} bytes`);
+      
+      // Save to phone's Music folder
+      try {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status === 'granted') {
+          const asset = await MediaLibrary.createAssetAsync(file.uri);
+          
+          // Try to add to "Music" album or create one
+          let albums = await MediaLibrary.getAlbumsAsync();
+          let musicAlbum = albums.find(a => a.title.toLowerCase() === 'music');
+          
+          if (!musicAlbum) {
+            musicAlbum = await MediaLibrary.createAlbumAsync('Music', asset, false);
+          } else {
+            await MediaLibrary.addAssetsToAlbumAsync([asset], musicAlbum, false);
+          }
+          
+          console.log(`[useDownloads] Saved to phone Music: ${asset.uri}`);
+        } else {
+          console.log(`[useDownloads] Media library permission not granted`);
+        }
+      } catch (mediaError) {
+        console.log(`[useDownloads] Could not save to phone media:`, mediaError);
+      }
+      
       setDownloading(prev => ({ ...prev, [trackId]: 100 }));
 
-      const newDownload = { track, localUri: file.uri, downloadedAt: Date.now() };
+      const newDownload = { track, localUri: file.uri, downloadedAt: Date.now(), fileSize };
       
       setDownloads(prev => {
         const newDownloads = [...prev, newDownload];
@@ -315,23 +264,14 @@ export const useDownloads = () => {
   }, [downloading]);
 
   // Get total download size
-  const getTotalDownloadSize = useCallback(async () => {
+  const getTotalDownloadSize = useCallback(() => {
     let totalSize = 0;
-    try {
-      for (const d of downloads) {
-        try {
-          const file = new FileSystem.File(d.localUri);
-          if (file.exists) {
-            const info = file.info();
-            totalSize += info.size || 0;
-          }
-        } catch (fileError) {
-          // Skip files that can't be accessed
-          console.log(`[useDownloads] Could not get size for: ${d.track.title}`);
-        }
+    for (const d of downloads) {
+      if (d.fileSize) {
+        totalSize += d.fileSize;
+      } else {
+        totalSize += 3000000; // Fallback estimate ~3MB per mp3
       }
-    } catch (e) {
-      console.error('Failed to calculate total size:', e);
     }
     return totalSize;
   }, [downloads]);

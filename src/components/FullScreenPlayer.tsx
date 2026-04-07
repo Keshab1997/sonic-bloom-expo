@@ -308,6 +308,9 @@ export const FullScreenPlayer: React.FC<Props> = memo(({ visible, onClose }) => 
     <View style={styles.infoRow}>
       <View style={styles.infoText}>
         <Text style={styles.trackTitle} numberOfLines={1}>{currentTrack?.title}</Text>
+        {currentTrack?.album && (
+          <Text style={styles.trackAlbum} numberOfLines={1}>{currentTrack.album}</Text>
+        )}
         <Text style={styles.trackArtist} numberOfLines={1}>{currentTrack?.artist}</Text>
       </View>
       <TouchableOpacity
@@ -354,6 +357,14 @@ export const FullScreenPlayer: React.FC<Props> = memo(({ visible, onClose }) => 
 
         {/* Toolbar */}
         <View style={styles.toolbar}>
+          <TouchableOpacity style={styles.toolbarBtn} onPress={() => seekBackward(10)} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="play-back" size={16} color="rgba(255,255,255,0.4)" />
+            <Text style={styles.toolbarLabel}>-10s</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolbarBtn} onPress={() => seekForward(30)} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="play-forward" size={16} color="rgba(255,255,255,0.4)" />
+            <Text style={styles.toolbarLabel}>+30s</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.toolbarBtn} onPress={handleAddToPlaylist} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="add-circle-outline" size={16} color="rgba(255,255,255,0.4)" />
             <Text style={styles.toolbarLabel}>Add to PL</Text>
@@ -425,7 +436,8 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 16 },
   infoText: { flex: 1 },
   trackTitle: { fontSize: 20, color: '#fff', fontWeight: 'bold' },
-  trackArtist: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+  trackAlbum: { fontSize: 13, color: '#1DB954', marginTop: 2, fontWeight: '500' },
+  trackArtist: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
   likeBtn: { padding: 8 },
   progressSection: { paddingHorizontal: 24, marginBottom: 16, position: 'relative' },
   timeTooltip: { position: 'absolute', top: -30, backgroundColor: 'rgba(255,255,255,0.9)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, transform: [{ translateX: -20 }], zIndex: 10 },
