@@ -5,6 +5,7 @@ import { Track } from '../data/playlist';
 import { usePlayer } from '../context/PlayerContext';
 import { RECENTLY_PLAYED_KEY } from '../data/constants';
 import { fetchJioSaavn } from '../lib/api';
+import { fetchYouTubeMusic } from '../lib/youtubeMusic';
 import { useOfflineCache } from '../hooks/useOfflineCache';
 import { usePlaylistsContext } from '../context/PlaylistsContext';
 import { useLikedSongsContext } from '../context/LikedSongsContext';
@@ -93,7 +94,7 @@ export const HomeScreen: React.FC = () => {
     };
   }, [trending.length]);
 
-  // Fetch all data with offline caching - OPTIMIZED with parallel fetching (YouTube removed)
+  // Fetch all data with offline caching - OPTIMIZED with parallel fetching
   const fetchAllData = useCallback(async () => {
     try {
       // Random queries for dynamic content
@@ -101,11 +102,13 @@ export const HomeScreen: React.FC = () => {
       const newReleaseQueries = ["new hindi songs 2025", "latest releases", "new bollywood music", "fresh hindi tracks"];
       const bengaliQueries = ["bengali top hits", "bangla gaan", "bengali romantic songs", "rabindra sangeet"];
       const forYouQueries = ["bollywood romantic hits", "hindi love songs", "sad hindi songs", "party bollywood hits", "90s bollywood"];
+      const ytQueries = ["top trending songs", "viral hits 2025", "best new music", "trending india"];
 
       const randomTrending = trendingQueries[Math.floor(Math.random() * trendingQueries.length)];
       const randomNewRelease = newReleaseQueries[Math.floor(Math.random() * newReleaseQueries.length)];
       const randomBengali = bengaliQueries[Math.floor(Math.random() * bengaliQueries.length)];
       const randomForYou = forYouQueries[Math.floor(Math.random() * forYouQueries.length)];
+      const randomYt = ytQueries[Math.floor(Math.random() * ytQueries.length)];
       const randomOffset = Math.floor(Math.random() * 50);
 
       // Fetch all data in parallel for better performance
@@ -114,11 +117,13 @@ export const HomeScreen: React.FC = () => {
         newReleasesData,
         bengaliHitsData,
         forYouData,
+        ytTrendingData,
       ] = await Promise.all([
         fetchJioSaavn(randomTrending, randomOffset).finally(() => setLoadingTrending(false)),
         fetchJioSaavn(randomNewRelease, randomOffset).finally(() => setLoadingNewReleases(false)),
         fetchJioSaavn(randomBengali, randomOffset, 15, "bengali").finally(() => setLoadingBengali(false)),
         fetchJioSaavn(randomForYou, randomOffset).finally(() => setLoadingForYou(false)),
+        fetchYouTubeMusic(randomYt, 15).finally(() => setLoadingYtTrending(false)),
       ]);
 
       // Update all states at once
@@ -127,18 +132,16 @@ export const HomeScreen: React.FC = () => {
       setBengaliHits(bengaliHitsData);
       setForYou(forYouData);
       setSuspense([]);
-      setYtTrending([]);
+      setYtTrending(ytTrendingData);
       setLoadingSuspense(false);
-      setLoadingYtTrending(false);
 
-      // Save to offline cache
+      // Save to offline cache (skip ytTrending for now)
       await saveToCache({
         trending: trendingData,
         newReleases: newReleasesData,
         bengaliHits: bengaliHitsData,
         forYou: forYouData,
         suspense: [],
-        ytTrending: [],
       });
     } catch (error) {
       console.error('Error fetching home data:', error);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Track } from '../../data/playlist';
 import { SongCard } from '../../components/SongCard';
@@ -25,11 +25,55 @@ interface HomeContentProps {
 }
 
 export const HomeContent: React.FC<HomeContentProps> = ({
-  loadingQuickPick, currentTrack, isPlaying,
-  onPlay, onAddToQueue, onQuickPick
+  loadingQuickPick, loadingYtTrending, currentTrack, isPlaying,
+  onPlay, onAddToQueue, onQuickPick, ytTrending, onYtQuickPick
 }) => {
   return (
     <>
+      {/* YouTube Music Section */}
+      {ytTrending.length > 0 && (
+        <>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>▶ YouTube Music</Text>
+            <View style={styles.dividerLine} />
+          </View>
+          <View style={styles.section}>
+            <View style={styles.ytSection}>
+              <Text style={styles.ytSectionTitle}>YouTube Music Trending</Text>
+              <Text style={styles.ytSectionSubtitle}>Powered by YouTube</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalScroll}
+            >
+              {ytTrending.slice(0, 10).map((track, index) => (
+                <TouchableOpacity
+                  key={track.id}
+                  style={styles.ytCard}
+                  onPress={() => onPlay(track, ytTrending, index)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.ytThumbnail}>
+                    <Image 
+                      source={{ uri: track.cover }} 
+                      style={styles.ytImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.ytPlayBtn}>
+                      <Ionicons name="play" size={20} color="#fff" />
+                    </View>
+                  </View>
+                  <Text style={styles.ytTitle} numberOfLines={1}>{track.title}</Text>
+                  <Text style={styles.ytArtist} numberOfLines={1}>{track.artist}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </>
+      )}
+
       {/* Divider: Quick Picks */}
       <View style={styles.divider}>
         <View style={styles.dividerLine} />
@@ -90,4 +134,15 @@ const styles = StyleSheet.create({
   quickPickInfo: { flex: 1, marginLeft: 10 },
   quickPickTitle: { fontSize: 12, color: '#fff', fontWeight: 'bold' },
   quickPickDesc: { fontSize: 10, color: '#666', marginTop: 2 },
+  // YouTube section styles
+  ytSection: { paddingHorizontal: 16, marginBottom: 12 },
+  ytSectionTitle: { fontSize: 18, color: '#fff', fontWeight: 'bold' },
+  ytSectionSubtitle: { fontSize: 12, color: '#666', marginTop: 2 },
+  horizontalScroll: { paddingHorizontal: 16, gap: 12 },
+  ytCard: { width: 140, marginRight: 12 },
+  ytThumbnail: { width: 140, height: 140, borderRadius: 12, overflow: 'hidden', backgroundColor: '#222' },
+  ytImage: { width: '100%', height: '100%' },
+  ytPlayBtn: { position: 'absolute', bottom: 8, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: '#dc2626', justifyContent: 'center', alignItems: 'center' },
+  ytTitle: { fontSize: 13, color: '#fff', fontWeight: '600', marginTop: 8 },
+  ytArtist: { fontSize: 11, color: '#888', marginTop: 2 },
 });
